@@ -1,0 +1,7 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# "always remember to escape things like ', so you don't break the linter"

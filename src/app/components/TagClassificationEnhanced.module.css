@@ -1,0 +1,46 @@
+.listViewContainer {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.listViewContainer::-webkit-scrollbar {
+  width: 6px;
+}
+
+.listViewContainer::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.listViewContainer::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+.listViewContainer::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.dateHeader {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+  padding: 0.5rem 0;
+}
+
+.eventItem {
+  transition: all 0.2s ease;
+}
+
+.eventItem:hover {
+  transform: translateX(4px);
+}
+
+.tagBadge {
+  transition: all 0.15s ease;
+}
+
+.tagBadge:hover {
+  transform: scale(1.05);
+}
