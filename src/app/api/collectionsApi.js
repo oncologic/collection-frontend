@@ -48,6 +48,48 @@ export async function createCollection(collectionData, headers) {
   return await response.json();
 }
 
+export async function createWorkflowInstanceFromTemplate(
+  templateCollectionId,
+  instanceData,
+  headers
+) {
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/api/collections/${templateCollectionId}/workflow-instance`,
+    {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(instanceData),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || error.message || "Failed to create project");
+  }
+
+  return await response.json();
+}
+
+export async function getWorkflowTimeline(collectionId, headers) {
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/api/collections/${collectionId}/workflow-timeline`,
+    {
+      method: "GET",
+      headers,
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || error.message || "Failed to fetch timeline");
+  }
+
+  return response.json();
+}
+
 export async function deleteCollection(id, headers) {
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_API_URL}/api/collections/${id}`,

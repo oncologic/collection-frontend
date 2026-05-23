@@ -123,6 +123,7 @@ import { useExternalLinkTags, useTags } from "@/app/hooks/useTags";
 import TagFilter from "@/app/components/filters/TagFilter";
 import TagClassificationEnhanced from "@/app/components/TagClassificationEnhanced";
 import MergeCollectionsModal from "@/app/components/MergeCollectionsModal";
+import WorkflowGanttChart from "@/app/components/WorkflowGanttChart";
 import { FaCodeBranch, FaMagic, FaUpload } from "react-icons/fa";
 const AddResourcesModal = dynamic(() =>
   import("@/app/components/AddResourcesModal")
@@ -350,7 +351,10 @@ export default function CollectionPage() {
   const router = useRouter();
 
   const { mutate: addExternalLinkMutation } = useAddExternalLinkToCollection();
-  const { mutate: updateExternalLinkMutation } =
+  const {
+    mutate: updateExternalLinkMutation,
+    mutateAsync: updateExternalLinkMutationAsync,
+  } =
     useUpdateExternalLinkInCollection();
 
   // State for controlling regular events fetching
@@ -1723,6 +1727,25 @@ export default function CollectionPage() {
     setIsEditing(false);
   };
 
+  const handleUpdateWorkflowStepDates = async (updates) => {
+    for (const update of updates) {
+      const step = update.step;
+      await updateExternalLinkMutationAsync({
+        collectionId,
+        externalLinkId: step.id,
+        linkData: {
+          ...step,
+          date: update.startDate,
+          startDate: update.startDate,
+          endDate: update.endDate || update.startDate,
+          workflowMetadata: step.workflowMetadata || {},
+        },
+      });
+    }
+
+    await refreshCollection();
+  };
+
   // Handle single field updates (for auto-save functionality)
   const handleUpdateSingleField = async (externalLinkId, fieldData) => {
     return new Promise((resolve, reject) => {
@@ -2922,6 +2945,12 @@ export default function CollectionPage() {
                   />
                 </div>
               )}
+
+              <WorkflowGanttChart
+                collection={collection}
+                canEdit={canEditCollection}
+                onUpdateStepDates={handleUpdateWorkflowStepDates}
+              />
 
               {/* Resources List */}
               <div className="space-y-6 p-6">

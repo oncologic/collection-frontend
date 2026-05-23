@@ -1697,11 +1697,20 @@ export default function Calendar({
                           : "Click for details";
 
                         return (
-                          <button
+                          <div
                             key={ev.id + (ev.notationId || "")}
+                            role="button"
+                            tabIndex={0}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedEvent(ev);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setSelectedEvent(ev);
+                              }
                             }}
                             onContextMenu={(e) => handleContextMenu(ev, e)}
                             draggable={isDraggable}
@@ -1924,7 +1933,7 @@ export default function Calendar({
                                 )}
                               </>
                             )}
-                          </button>
+                          </div>
                         );
                       })}
                   </div>

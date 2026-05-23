@@ -45,6 +45,18 @@ export function AuthProvider({ children }) {
 
       // If user doesn't exist in database, create them
       if (response.status === 404 && user) {
+        const urlTenant =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("tenant")
+            : null;
+        const signupTenant =
+          user.unsafeMetadata?.signup_tenant ||
+          user.publicMetadata?.signup_tenant ||
+          user.publicMetadata?.tenant ||
+          urlTenant;
+        const isPersonalSignup = signupTenant === "personal";
+        const personalTenantId = process.env.NEXT_PUBLIC_COMMUNITY_TENANT;
+
         const createResponse = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/api/users`,
           {
@@ -57,8 +69,11 @@ export function AuthProvider({ children }) {
               email: user.emailAddresses[0].emailAddress,
               first_name: user.firstName || "",
               last_name: user.lastName || "",
-              roles: [],
-              tenants: [],
+              roles: isPersonalSignup
+                ? [{ id: "personal", requires_approval: false }]
+                : [],
+              tenants:
+                isPersonalSignup && personalTenantId ? [personalTenantId] : [],
             }),
           },
         );
