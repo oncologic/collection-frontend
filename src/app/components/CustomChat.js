@@ -863,8 +863,10 @@ const CustomChat = forwardRef(
       const itemsToUse = usesMentions ? mentionedItems : selectedResources;
 
       if (onBeforeSend) {
+        let handled = false;
+        setIsLoading(true);
         try {
-          const handled = await onBeforeSend({
+          handled = await onBeforeSend({
             query,
             cleanQuery,
             selectedResources: itemsToUse,
@@ -880,6 +882,8 @@ const CustomChat = forwardRef(
           console.error("Before-send handler failed:", error);
           toast.error("Failed to handle message");
           return;
+        } finally {
+          setIsLoading(false);
         }
       }
 

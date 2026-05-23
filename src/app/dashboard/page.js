@@ -303,6 +303,25 @@ const buildPlannerStepDrafts = (steps, projectStartDate, templateStartDate) => {
   }, {});
 };
 
+const getWorkflowPlannerAiAnswer = (response) => {
+  if (!response) return "";
+  if (typeof response.answer === "string") return response.answer;
+  if (typeof response.response === "string") return response.response;
+  if (typeof response.content === "string") return response.content;
+  if (typeof response.content?.answer === "string") {
+    return response.content.answer;
+  }
+  if (typeof response.content?.response === "string") {
+    return response.content.response;
+  }
+  return "";
+};
+
+const getWorkflowPlannerAiCollections = (response) => {
+  const data = response?.data || response?.content?.data || {};
+  return Array.isArray(data.collections) ? data.collections : [];
+};
+
 const DashboardContent = ({
   // Add props for data that was previously fetched
   subscribedEvents = [],
@@ -973,11 +992,44 @@ const DashboardContent = ({
   };
 
   const openWorkflowPlannerFromPrompt = async (prompt) => {
-    const templateCandidates = (allCollectionsData || [])
+    const workflowTemplates = (allCollectionsData || []).filter(
+      isWorkflowTemplateCollection
+    );
+
+    const planningResponse = await aiChat.mutateAsync({
+      prompt: `Question: ${prompt}\n\nUse the existing knowledge base and any workflow template collections to identify the likely workstreams, dependencies, useful templates, and an estimated implementation path. If a matching workflow template exists, mention why it is relevant.`,
+      history,
+      data: {
+        collections: [],
+        externalLinks: [],
+        resources: [],
+        events: [],
+        organizations: [],
+        videos: [],
+        notations: [],
+        attachments: [],
+        linkGroups: [],
+        socialMediaAccounts: [],
+        prompt,
+        disableRAG: false,
+        workflowPlanningRequest: true,
+      },
+      disableRAG: false,
+    });
+    const planningAnswer = getWorkflowPlannerAiAnswer(planningResponse);
+    const aiReferencedCollectionIds = new Set(
+      getWorkflowPlannerAiCollections(planningResponse).map((collection) =>
+        String(collection.id)
+      )
+    );
+
+    const templateCandidates = workflowTemplates
       .filter(isWorkflowTemplateCollection)
       .map((collection) => ({
         ...collection,
-        matchScore: scoreWorkflowTemplate(collection, prompt),
+        matchScore:
+          scoreWorkflowTemplate(collection, prompt) +
+          (aiReferencedCollectionIds.has(String(collection.id)) ? 100 : 0),
       }))
       .sort((a, b) => {
         if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
@@ -992,7 +1044,10 @@ const DashboardContent = ({
           id: Date.now(),
           prompt,
           answer:
-            "I could not find any workflow template collections yet. Create or seed a collection with workflow template metadata first, then ask again.",
+            `${
+              planningAnswer ||
+              "I checked the knowledge base for a matching workflow template."
+            }\n\nI could not find any workflow template collections yet. Create or seed a collection with workflow template metadata first, then ask again.`,
           timestamp: Date.now(),
         },
       ]);
@@ -1063,8 +1118,12 @@ const DashboardContent = ({
           stepCount === 1 ? "" : "s"
         }, estimated at about ${Math.ceil(durationDays / 7)} week${
           Math.ceil(durationDays / 7) === 1 ? "" : "s"
-        }. Review the template, choose the steps to copy, adjust dates, then create your project.`,
+        }.\n\n${
+          planningAnswer ||
+          "I used the knowledge base to look for relevant planning context before opening this template planner."
+        }\n\nReview the template, choose the steps to copy, adjust dates, then create your project.`,
         timestamp: Date.now(),
+        data: planningResponse?.data || planningResponse?.content?.data,
       },
     ]);
   };
