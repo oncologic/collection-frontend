@@ -60,6 +60,7 @@ const CustomChat = forwardRef(
       allSocialMediaAccounts = [],
       pinnedItems = [],
       enableTypingAnimation = true,
+      onBeforeSend,
     },
     ref,
   ) => {
@@ -860,6 +861,27 @@ const CustomChat = forwardRef(
       // Determine if we should use mentions or regular selected resources
       const usesMentions = mentionedItems.length > 0;
       const itemsToUse = usesMentions ? mentionedItems : selectedResources;
+
+      if (onBeforeSend) {
+        try {
+          const handled = await onBeforeSend({
+            query,
+            cleanQuery,
+            selectedResources: itemsToUse,
+            mentionedItems,
+          });
+
+          if (handled) {
+            setQuery("");
+            setMentionedItems([]);
+            return;
+          }
+        } catch (error) {
+          console.error("Before-send handler failed:", error);
+          toast.error("Failed to handle message");
+          return;
+        }
+      }
 
       const totalTokens = estimateTokenCount(
         JSON.stringify({
