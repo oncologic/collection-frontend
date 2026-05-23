@@ -80,8 +80,44 @@ const WORKFLOW_INTENT_TERMS = [
   "app idea",
   "build an app",
   "build this project",
+  "bring this project to life",
+  "bring this idea to life",
+  "new idea",
   "how long",
+  "what will be needed",
+  "what is needed",
+  "what do i need",
+  "what would be needed",
+  "determine what will be needed",
   "timeline",
+  "project plan",
+  "workflow",
+  "template",
+];
+
+const WORKFLOW_CREATION_TERMS = [
+  "app",
+  "application",
+  "idea",
+  "project",
+  "product",
+  "platform",
+  "system",
+  "tool",
+  "website",
+];
+
+const WORKFLOW_PLANNING_TERMS = [
+  "build",
+  "create",
+  "develop",
+  "make",
+  "launch",
+  "bring",
+  "needed",
+  "requirements",
+  "timeline",
+  "how long",
   "project plan",
   "workflow",
   "template",
@@ -177,10 +213,17 @@ const tokenizePlannerText = (value) =>
 
 const isWorkflowPlanningPrompt = (prompt) => {
   const lower = String(prompt || "").toLowerCase();
-  const hasPlanningTerm = WORKFLOW_INTENT_TERMS.some((term) =>
+  const hasExplicitIntent = WORKFLOW_INTENT_TERMS.some((term) =>
     lower.includes(term)
   );
-  return hasPlanningTerm && (lower.includes("build") || lower.includes("idea"));
+  const hasCreationTerm = WORKFLOW_CREATION_TERMS.some((term) =>
+    lower.includes(term)
+  );
+  const hasPlanningTerm = WORKFLOW_PLANNING_TERMS.some((term) =>
+    lower.includes(term)
+  );
+
+  return hasCreationTerm && (hasExplicitIntent || hasPlanningTerm);
 };
 
 const isWorkflowTemplateCollection = (collection) => {
