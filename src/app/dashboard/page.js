@@ -303,25 +303,6 @@ const buildPlannerStepDrafts = (steps, projectStartDate, templateStartDate) => {
   }, {});
 };
 
-const getWorkflowPlannerAiAnswer = (response) => {
-  if (!response) return "";
-  if (typeof response.answer === "string") return response.answer;
-  if (typeof response.response === "string") return response.response;
-  if (typeof response.content === "string") return response.content;
-  if (typeof response.content?.answer === "string") {
-    return response.content.answer;
-  }
-  if (typeof response.content?.response === "string") {
-    return response.content.response;
-  }
-  return "";
-};
-
-const getWorkflowPlannerAiCollections = (response) => {
-  const data = response?.data || response?.content?.data || {};
-  return Array.isArray(data.collections) ? data.collections : [];
-};
-
 const DashboardContent = ({
   // Add props for data that was previously fetched
   subscribedEvents = [],
@@ -923,18 +904,35 @@ const DashboardContent = ({
   };
 
   const handleChatComplete = (chatEntry) => {
+    const content = chatEntry.content || chatEntry;
+
     setChatHistory((prev) => [
       ...prev,
       {
         id: Date.now(),
-        prompt: chatEntry.content?.prompt,
-        answer: chatEntry.content?.answer,
+        prompt: content?.prompt,
+        answer: content?.answer,
         timestamp: chatEntry.timestamp,
         userInfo: chatEntry.userInfo,
       },
     ]);
 
-    setChatData(chatEntry.content?.data);
+    setChatData(content?.data);
+
+    const referencedWorkflowTemplates = (content?.data?.collections || []).filter(
+      isWorkflowTemplateCollection
+    );
+
+    if (
+      isWorkflowPlanningPrompt(content?.prompt) &&
+      referencedWorkflowTemplates.length > 0
+    ) {
+      openWorkflowPlannerFromTemplates(content.prompt, referencedWorkflowTemplates).catch(
+        (error) => {
+          toast.error(error?.message || "Failed to prepare workflow planner");
+        }
+      );
+    }
   };
 
   const clearChatHistory = () => {
@@ -991,69 +989,20 @@ const DashboardContent = ({
     };
   };
 
-  const openWorkflowPlannerFromPrompt = async (prompt) => {
-    const workflowTemplates = (allCollectionsData || []).filter(
-      isWorkflowTemplateCollection
-    );
-
-    const planningResponse = await aiChat.mutateAsync({
-      prompt: `Question: ${prompt}\n\nUse the existing knowledge base and any workflow template collections to identify the likely workstreams, dependencies, useful templates, and an estimated implementation path. If a matching workflow template exists, mention why it is relevant.`,
-      history,
-      data: {
-        collections: [],
-        externalLinks: [],
-        resources: [],
-        events: [],
-        organizations: [],
-        videos: [],
-        notations: [],
-        attachments: [],
-        linkGroups: [],
-        socialMediaAccounts: [],
-        prompt,
-        disableRAG: false,
-        workflowPlanningRequest: true,
-      },
-      disableRAG: false,
-    });
-    const planningAnswer = getWorkflowPlannerAiAnswer(planningResponse);
-    const aiReferencedCollectionIds = new Set(
-      getWorkflowPlannerAiCollections(planningResponse).map((collection) =>
-        String(collection.id)
-      )
-    );
-
-    const templateCandidates = workflowTemplates
-      .filter(isWorkflowTemplateCollection)
+  const openWorkflowPlannerFromTemplates = async (
+    prompt,
+    referencedTemplates
+  ) => {
+    const templateCandidates = referencedTemplates
       .map((collection) => ({
         ...collection,
-        matchScore:
-          scoreWorkflowTemplate(collection, prompt) +
-          (aiReferencedCollectionIds.has(String(collection.id)) ? 100 : 0),
+        matchScore: scoreWorkflowTemplate(collection, prompt),
       }))
       .sort((a, b) => {
         if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
         return Number(b.externalLinksCount || 0) - Number(a.externalLinksCount || 0);
       })
       .slice(0, 5);
-
-    if (templateCandidates.length === 0) {
-      setChatHistory((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          prompt,
-          answer:
-            `${
-              planningAnswer ||
-              "I checked the knowledge base for a matching workflow template."
-            }\n\nI could not find any workflow template collections yet. Create or seed a collection with workflow template metadata first, then ask again.`,
-          timestamp: Date.now(),
-        },
-      ]);
-      return;
-    }
-
     const headers = await getAuthHeader();
     const templates = await Promise.all(
       templateCandidates.map(async (template) => {
@@ -1097,48 +1046,6 @@ const DashboardContent = ({
       startDate: projectStartDate,
       includeResources: true,
     });
-
-    const stepCount = selectedTemplate.timelineItems?.length || 0;
-    const durationDays = getPlannerSummary({
-      templates,
-      selectedTemplateId: selectedTemplate.id,
-      selectedStepIds,
-      stepDrafts,
-      startDate: projectStartDate,
-    }).totalDays;
-
-    setChatHistory((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        prompt,
-        answer: `I found ${templates.length} workflow template${
-          templates.length === 1 ? "" : "s"
-        }. The best match is "${selectedTemplate.name}" with ${stepCount} step${
-          stepCount === 1 ? "" : "s"
-        }, estimated at about ${Math.ceil(durationDays / 7)} week${
-          Math.ceil(durationDays / 7) === 1 ? "" : "s"
-        }.\n\n${
-          planningAnswer ||
-          "I used the knowledge base to look for relevant planning context before opening this template planner."
-        }\n\nReview the template, choose the steps to copy, adjust dates, then create your project.`,
-        timestamp: Date.now(),
-        data: planningResponse?.data || planningResponse?.content?.data,
-      },
-    ]);
-  };
-
-  const handleDashboardBeforeSend = async ({ query, cleanQuery }) => {
-    const prompt = cleanQuery || query;
-    if (!isWorkflowPlanningPrompt(prompt)) return false;
-
-    try {
-      await openWorkflowPlannerFromPrompt(prompt);
-    } catch (error) {
-      toast.error(error?.message || "Failed to prepare workflow planner");
-    }
-
-    return true;
   };
 
   const handlePlannerTemplateChange = (templateId) => {
@@ -1718,7 +1625,6 @@ const DashboardContent = ({
             history={chatHistory}
             onChatComplete={handleChatComplete}
             onClearHistory={clearChatHistory}
-            onBeforeSend={handleDashboardBeforeSend}
             chatData={chatData}
             aiChat={aiChat}
             allEvents={allEventsData}
