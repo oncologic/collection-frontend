@@ -612,11 +612,11 @@ const OpportunityDetailModal = ({
                 </div>
               )}
 
-              {/* Organizations */}
+              {/* Business Units */}
               {opportunityOrganizations.length > 1 && (
                 <div>
                   <h3 className="text-lg font-semibold text-slate-600 mb-3">
-                    Participating Organizations
+                    Participating Business Units
                   </h3>
                   <div className="space-y-2">
                     {opportunityOrganizations.map((org) => (

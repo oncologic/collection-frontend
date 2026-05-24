@@ -146,10 +146,6 @@ export const validatePlanChange = (currentPlan, newPlan, userSubscription) => {
     };
   }
 
-  // Check if user has an active Stripe subscription for downgrades
-  const hasActiveStripeSubscription =
-    userSubscription?.subscription?.status === "active";
-
   const hierarchy = {
     explorer: 0,
     basic: 0,
@@ -203,8 +199,8 @@ export const getPlanChangeConfirmationFromValidation = (
 
 This will:
 - Give you immediate access to new features
-- Pro-rate your billing for the current period
-- Start your new billing cycle
+- Update your internal access level
+- Keep all existing data
 
 Continue with upgrade?`;
   }
@@ -215,7 +211,7 @@ Continue with upgrade?`;
 This will:
 - Reduce your feature access
 - May limit your data storage
-- Take effect at the end of your current billing period
+- Take effect immediately
 
 You can always upgrade again later.`;
   }
@@ -242,8 +238,8 @@ export const getPlanChangeConfirmation = (
 
 This will:
 - Give you immediate access to new features
-- Pro-rate your billing for the current period
-- Start your new billing cycle
+- Update your internal access level
+- Keep all existing data
 
 Continue with upgrade?`;
   }
@@ -254,7 +250,7 @@ Continue with upgrade?`;
 This will:
 - Reduce your feature access
 - May limit your data storage
-- Take effect at the end of your current billing period
+- Take effect immediately
 
 You can always upgrade again later.`;
   }
@@ -324,9 +320,8 @@ export const hasPendingSubscriptionChanges = (userSubscription) => {
 
   // Check if there's a scheduled plan change
   const hasScheduledChange = userSubscription.subscription.cancel_at_period_end;
-  const hasUpcomingInvoice = userSubscription.subscription.upcoming_invoice;
 
-  return hasScheduledChange || hasUpcomingInvoice;
+  return hasScheduledChange;
 };
 
 /**
@@ -395,15 +390,6 @@ export const getCleanupSummary = (usageIssues) => {
   });
 
   return `Required actions: ${actions.join(", ")}`;
-};
-
-/**
- * Determine if a plan change should show Stripe payment flow
- * @param {Object} validation - Validation result from backend
- * @returns {boolean} - True if Stripe payment is required
- */
-export const requiresStripePayment = (validation) => {
-  return validation.requiresPayment && validation.changeType === "upgrade";
 };
 
 /**

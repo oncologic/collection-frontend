@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   FaUser,
   FaPlus,
@@ -42,22 +42,7 @@ const Chat = ({
   const [showCreditEstimator, setShowCreditEstimator] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [largeResources, setLargeResources] = useState([]);
-
-  useEffect(() => {
-    const categories = [
-      { items: collections, type: "collection" },
-      { items: resources, type: "resource" },
-      { items: externalLinks, type: "link" },
-      { items: events, type: "event" },
-    ];
-
-    const nonEmptyCategories = categories.filter((cat) => cat.items.length > 0);
-
-    if (nonEmptyCategories.length === 1) {
-      const { items, type } = nonEmptyCategories[0];
-      handleQuickAdd(items, type);
-    }
-  }, []);
+  const hasAutoQuickAddedRef = useRef(false);
 
   const handleUserInfoClick = () => {
     setIncludeUserInfo(!includeUserInfo);
@@ -89,7 +74,7 @@ const Chat = ({
     events.length > 0 ||
     collections.length > 0;
 
-  const handleQuickAdd = (items, type) => {
+  const handleQuickAdd = useCallback((items, type) => {
     const TOKEN_LIMIT = 900000;
 
     const { safe, large } = items.reduce(
@@ -135,7 +120,26 @@ const Chat = ({
       (prev) =>
         prev + safe.reduce((acc, resource) => acc + resource.tokenCount, 0)
     );
-  };
+  }, []);
+
+  useEffect(() => {
+    if (hasAutoQuickAddedRef.current) return;
+
+    const categories = [
+      { items: collections, type: "collection" },
+      { items: resources, type: "resource" },
+      { items: externalLinks, type: "link" },
+      { items: events, type: "event" },
+    ];
+
+    const nonEmptyCategories = categories.filter((cat) => cat.items.length > 0);
+
+    if (nonEmptyCategories.length === 1) {
+      const { items, type } = nonEmptyCategories[0];
+      handleQuickAdd(items, type);
+      hasAutoQuickAddedRef.current = true;
+    }
+  }, [collections, resources, externalLinks, events, handleQuickAdd]);
 
   const renderLargeResources = (setTotalTokens) => {
     if (largeResources.length === 0) return null;

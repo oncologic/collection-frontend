@@ -113,7 +113,12 @@ const ExternalLinkResourceAICreate = ({
   const { data: existingResources } = useGetResources();
   const queryClient = useQueryClient();
   const searchMutation = useContentSearch();
+  const searchMutationRef = useRef(searchMutation);
   const searchInputRef = useRef(null);
+
+  useEffect(() => {
+    searchMutationRef.current = searchMutation;
+  }, [searchMutation]);
 
   // Generate preview with AI
   const handleGeneratePreview = async () => {
@@ -155,7 +160,7 @@ const ExternalLinkResourceAICreate = ({
       setDebouncedQuery(searchQuery);
       if (searchQuery.length >= 2) {
         setIsSearching(true);
-        searchMutation.mutate(
+        searchMutationRef.current.mutate(
           { searchQuery },
           {
             onSuccess: (data) => {

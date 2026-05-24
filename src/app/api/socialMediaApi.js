@@ -148,7 +148,8 @@ export const createSocialMediaAccount = async (accountData, headers) => {
       throw new Error(error.message || "Failed to create social media account");
     }
 
-    return response.json();
+    const data = await response.json();
+    return data?.account ? { ...data.account, collection: data.collection } : data;
   } catch (error) {
     console.error("Error creating social media account:", error);
     throw error;
@@ -203,11 +204,17 @@ export const deleteSocialMediaAccount = async (id, headers) => {
   }
 };
 
+const toLegacyAssociatedType = (associatedType) =>
+  associatedType === "business_unit" || associatedType === "businessUnit"
+    ? "organization"
+    : associatedType;
+
 // Social Media Associations APIs
 export const fetchAssociatedSocialMediaAccounts = async (associatedId, associatedType, headers) => {
   try {
+    const normalizedAssociatedType = toLegacyAssociatedType(associatedType);
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/social-media/associations?associatedId=${associatedId}&associatedType=${associatedType}`,
+      `${process.env.NEXT_PUBLIC_API_URL}/api/social-media/associations?associatedId=${associatedId}&associatedType=${normalizedAssociatedType}`,
       {
         headers,
       }
@@ -241,6 +248,10 @@ export const fetchSocialMediaAccountAssociations = async (socialMediaAccountId, 
 
 export const createSocialMediaAssociation = async (associationData, headers) => {
   try {
+    const payload = {
+      ...associationData,
+      associatedType: toLegacyAssociatedType(associationData.associatedType),
+    };
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/api/social-media/associations`,
       {
@@ -249,7 +260,7 @@ export const createSocialMediaAssociation = async (associationData, headers) => 
           ...headers,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(associationData),
+        body: JSON.stringify(payload),
       }
     );
 
@@ -267,6 +278,10 @@ export const createSocialMediaAssociation = async (associationData, headers) => 
 
 export const deleteSocialMediaAssociation = async (associationData, headers) => {
   try {
+    const payload = {
+      ...associationData,
+      associatedType: toLegacyAssociatedType(associationData.associatedType),
+    };
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/api/social-media/associations`,
       {
@@ -275,7 +290,7 @@ export const deleteSocialMediaAssociation = async (associationData, headers) => 
           ...headers,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(associationData),
+        body: JSON.stringify(payload),
       }
     );
 

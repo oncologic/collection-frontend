@@ -81,6 +81,11 @@ const CollectionChat = ({
 
   const textareaRef = useRef(null);
   const chatEndRef = useRef(null);
+  const contentSearchMutationRef = useRef(contentSearchMutation);
+
+  useEffect(() => {
+    contentSearchMutationRef.current = contentSearchMutation;
+  }, [contentSearchMutation]);
 
   // Reset typing animation for existing messages when chat opens
   useEffect(() => {
@@ -92,7 +97,7 @@ const CollectionChat = ({
         }))
       );
     }
-  }, [isOpen]);
+  }, [isOpen, history.length]);
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
@@ -123,7 +128,7 @@ const CollectionChat = ({
   useEffect(() => {
     if (mentionQuery && mentionQuery.length >= 2) {
       const timeoutId = setTimeout(() => {
-        contentSearchMutation.mutate(
+        contentSearchMutationRef.current.mutate(
           { searchQuery: mentionQuery },
           {
             onSuccess: (data) => {

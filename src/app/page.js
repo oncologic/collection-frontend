@@ -99,7 +99,7 @@ function HomeContent() {
       icon: FaMagic,
       title: "AI-Powered Insights",
       description:
-        "Get personalized suggestions and insights powered by advanced AI tuned to the latest approved cancer resources and organizations.",
+        "Get personalized suggestions and insights powered by advanced AI tuned to the latest approved cancer resources and business units.",
       gradient: "bg-gradient-to-r from-purple-500 to-indigo-500",
     },
     {
@@ -113,7 +113,7 @@ function HomeContent() {
       icon: FaHeart,
       title: "Patient Support",
       description:
-        "Discover comprehensive resources, support groups, and educational materials provided by verified organizations.",
+        "Discover comprehensive resources, support groups, and educational materials provided by verified business units.",
       gradient: "bg-gradient-to-r from-rose-500 to-pink-500",
     },
   ];
@@ -121,7 +121,7 @@ function HomeContent() {
   const personalFeatures = [
     {
       icon: FaRocket,
-      title: "Smart Organization",
+      title: "Smart Content Tools",
       description:
         "Organize your thoughts, projects, and goals with AI-powered categorization and intelligent linking between related content.",
       gradient: "bg-gradient-to-r from-orange-500 to-red-500",
@@ -321,7 +321,7 @@ function HomeContent() {
               </div>
               <h3 className="text-xl font-bold text-white mb-2">Reliable</h3>
               <p className="text-slate-300">
-                Resources created by leading organizations and medical
+                Resources created by leading business units and medical
                 professionals
               </p>
             </div>
@@ -469,7 +469,7 @@ function HomeContent() {
               <ul className="space-y-2 text-gray-400">
                 <li>Resources</li>
                 <li>Events</li>
-                <li>Organizations</li>
+                <li>Business Units</li>
                 <li>Clinical Trials</li>
                 <li>Collections</li>
               </ul>

@@ -111,9 +111,9 @@ const ImportPage = () => {
 
   // Download sample TSV
   const downloadSampleTSV = () => {
-    const sampleContent = `Organization\tService\tLink\tEmail\tPhone number\tDemographics\tAccessibility\tDescription
-Sample Organization\tEducation, Support\thttps://example.org\tinfo@example.org\t555-1234\tAll Patients\tNational\tSample description of services
-Another Org\tFinancial Assistance\thttps://another.org\tcontact@another.org\tN/A\tPediatric Patients\tVirtual\tProvides financial support for families`;
+    const sampleContent = `Business Unit\tService\tLink\tEmail\tPhone number\tDemographics\tAccessibility\tDescription
+Sample Business Unit\tEducation, Support\thttps://example.org\tinfo@example.org\t555-1234\tAll Patients\tNational\tSample description of services
+Another Business Unit\tFinancial Assistance\thttps://another.org\tcontact@another.org\tN/A\tPediatric Patients\tVirtual\tProvides financial support for families`;
 
     const blob = new Blob([sampleContent], { type: 'text/tab-separated-values' });
     const url = URL.createObjectURL(blob);
@@ -144,7 +144,7 @@ Another Org\tFinancial Assistance\thttps://another.org\tcontact@another.org\tN/A
     if (executeResult?.success) {
       setCurrentStep('complete');
       setTimeout(() => {
-        router.push('/organizations');
+        router.push('/business-units');
       }, 3000);
     }
   }, [executeResult, router]);
@@ -166,7 +166,7 @@ Another Org\tFinancial Assistance\thttps://another.org\tcontact@another.org\tN/A
       <div className="max-w-4xl mx-auto px-4">
         <div className="bg-white rounded-lg shadow-lg p-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-6">
-            Import Organizations & Resources
+            Import Business Units & Resources
           </h1>
 
           {/* Step indicator */}
@@ -219,7 +219,7 @@ Another Org\tFinancial Assistance\thttps://another.org\tcontact@another.org\tN/A
                 Upload TSV File
               </h3>
               <p className="text-sm text-gray-500 mb-4">
-                Select a TSV file containing organizations and resources data
+                Select a TSV file containing business units and resources data
               </p>
               
               <input
@@ -273,7 +273,7 @@ Another Org\tFinancial Assistance\thttps://another.org\tcontact@another.org\tN/A
                 <h3 className="font-medium text-blue-900 mb-2">Import Summary</h3>
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
-                    <span className="text-blue-700">Organizations:</span>
+                    <span className="text-blue-700">Business Units:</span>
                     <span className="ml-2 font-semibold">{previewData.organizations?.length || 0}</span>
                   </div>
                   <div>
@@ -293,7 +293,7 @@ Another Org\tFinancial Assistance\thttps://another.org\tcontact@another.org\tN/A
                   className="flex-1 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
                 >
                   <FaEdit className="inline-block mr-2" />
-                  Edit Organizations
+                  Edit Business Units
                 </button>
                 <button
                   onClick={() => handleEdit('resources')}
@@ -333,7 +333,7 @@ Another Org\tFinancial Assistance\thttps://another.org\tcontact@another.org\tN/A
                 Import Successful!
               </h3>
               <p className="text-gray-600 mb-4">
-                Successfully imported {executeResult.summary?.organizationsCreated || 0} organizations 
+                Successfully imported {executeResult.summary?.organizationsCreated || 0} business units
                 and {executeResult.summary?.resourcesCreated || 0} resources.
               </p>
               {executeResult.summary?.errors > 0 && (
@@ -342,7 +342,7 @@ Another Org\tFinancial Assistance\thttps://another.org\tcontact@another.org\tN/A
                 </p>
               )}
               <p className="text-sm text-gray-500 mt-4">
-                Redirecting to organizations page...
+                Redirecting to business units page...
               </p>
             </div>
           )}

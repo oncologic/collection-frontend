@@ -30,6 +30,7 @@ const EventsExportModal = ({
   const [selectedEventIds, setSelectedEventIds] = useState(new Set());
   const [activeTab, setActiveTab] = useState("selection"); // "selection" or "preview"
   const llmDropdownRef = useRef(null);
+  const generatePromptContentRef = useRef(null);
 
   const [exportOptions, setExportOptions] = useState({
     includeDate: true,
@@ -61,7 +62,7 @@ const EventsExportModal = ({
   // Generate prompt content when selection or options change
   useEffect(() => {
     if (isOpen && selectedEventIds.size > 0) {
-      generatePromptContent();
+      generatePromptContentRef.current?.();
     }
   }, [selectedEventIds, exportOptions, isOpen]);
 
@@ -197,7 +198,7 @@ const EventsExportModal = ({
       ) {
         const orgNames = event.organizations.map((o) => o.name).filter(Boolean);
         if (orgNames.length > 0) {
-          prompt += `**Organizations:** ${orgNames.join(", ")}\n`;
+          prompt += `**Business Units:** ${orgNames.join(", ")}\n`;
         }
       }
 
@@ -229,6 +230,7 @@ const EventsExportModal = ({
 
     setPromptContent(prompt);
   };
+  generatePromptContentRef.current = generatePromptContent;
 
   const handleCopy = () => {
     if (selectedEventIds.size === 0) {
@@ -287,7 +289,7 @@ const EventsExportModal = ({
       "Start Time",
       "End Date",
       "End Time",
-      "Organizations",
+      "Business Units",
       "Tags",
       "City",
       "State",
@@ -436,7 +438,7 @@ const EventsExportModal = ({
                   <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Search events by name, organization, location, tags..."
+                    placeholder="Search events by name, business unit, location, tags..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"

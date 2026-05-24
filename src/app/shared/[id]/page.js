@@ -134,6 +134,7 @@ export default function SharedContentPage() {
   const [showAttachmentsModal, setShowAttachmentsModal] = useState(false);
   const [showCalendarHover, setShowCalendarHover] = useState(false);
   const calendarButtonRef = useRef(null);
+  const handleEmailValidationRef = useRef(null);
   const [showNotationDates, setShowNotationDates] = useState(true);
 
   // Guide view state
@@ -183,7 +184,7 @@ export default function SharedContentPage() {
 
       if (emailToValidate) {
         // Pass the token directly instead of relying on state
-        handleEmailValidation(emailToValidate, tokenParam);
+        handleEmailValidationRef.current?.(emailToValidate, tokenParam);
       }
     } else {
       setError("No token found in URL");
@@ -267,6 +268,7 @@ Please share the BACKEND_REQUIREMENTS.md file with your backend team to implemen
       console.error("Email validation error:", err);
     }
   };
+  handleEmailValidationRef.current = handleEmailValidation;
 
   // Handle email form submission
   const handleEmailSubmit = (submittedEmail) => {

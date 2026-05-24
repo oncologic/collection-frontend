@@ -2715,7 +2715,6 @@ const PublicExternalLinkPage = () => {
                           showCondition={true}
                           title="Tag Categories"
                           events={calendarEvents}
-                          showGoogleCalendarEvents={false}
                           showPublicOnly={false}
                           showRegularEvents={false}
                           isCollectionContext={false}

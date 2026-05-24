@@ -48,6 +48,27 @@ export async function createCollection(collectionData, headers) {
   return await response.json();
 }
 
+export async function updateCollection(collectionId, collectionData, headers) {
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/api/collections/${collectionId}`,
+    {
+      method: "PATCH",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(collectionData),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to update collection");
+  }
+
+  return await response.json();
+}
+
 export async function createWorkflowInstanceFromTemplate(
   templateCollectionId,
   instanceData,
@@ -312,6 +333,34 @@ export async function addExternalLinkToCollection(
   return response.json();
 }
 
+export async function addResourcesToCollectionExternalLink(
+  collectionId,
+  externalLinkId,
+  resources,
+  headers
+) {
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/api/collections/${collectionId}/external-links/${externalLinkId}/resources`,
+    {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(resources),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(
+      error.message || error.error || "Failed to add resources to external link"
+    );
+  }
+
+  return response.json();
+}
+
 export async function updateExternalLinkInCollection(
   collectionId,
   externalLinkId,
@@ -333,6 +382,31 @@ export async function updateExternalLinkInCollection(
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.message || "Failed to update external link");
+  }
+
+  return response.json();
+}
+
+export async function updateExternalLinkWhiteboard(
+  externalLinkId,
+  whiteboardData,
+  headers
+) {
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/api/collections/external-link/${externalLinkId}/whiteboard`,
+    {
+      method: "PATCH",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ whiteboardData }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to update external link whiteboard");
   }
 
   return response.json();

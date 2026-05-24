@@ -15,8 +15,9 @@ import {
   FaEllipsisH,
   FaClock,
   FaTimes,
-  FaUpload,
   FaTag,
+  FaFilter,
+  FaList,
 } from "react-icons/fa";
 import { useRouter } from "next/navigation";
 import DOMPurify from "dompurify";
@@ -30,8 +31,6 @@ import TimePickerForm from "../forms/TimePickerForm";
 import { formatTimeDisplay } from "./CalendarView";
 import { useMultiDaySelection } from "../../hooks/useMultiDaySelection";
 import AvailabilityComposer from "./AvailabilityComposer";
-import { useGoogleCalendar } from "../../hooks/useGoogleCalendar";
-import { FaGoogle, FaFilter, FaList } from "react-icons/fa";
 import MultiSelect from "../inputs/MultiSelect";
 import ListView from "./ListView";
 import { formatLongDateRange } from "../../utils/general";
@@ -666,10 +665,8 @@ export default function Calendar({
   onEventUpdate,
   onMonthChange,
   showPublicOnly = false,
-  showGoogleCalendarEvents: showGoogleCalendarEventsProp = false, // Changed default to false (opt-in)
   showRegularEvents: showRegularEventsProp = true, // Default to true for backwards compatibility
   isCollectionContext = false, // New prop to indicate we're in a collection
-  onGoogleCalendarToggle,
   onPublicOnlyToggle,
   onRegularEventsToggle,
   initialMonth = null,
@@ -687,7 +684,7 @@ export default function Calendar({
     if (initialMonth && !currentMonth.equals(initialMonth)) {
       setCurrentMonth(initialMonth);
     }
-  }, [initialMonth]);
+  }, [initialMonth, currentMonth]);
   const [view, setView] = useState(() => {
     // Default to month view for events page
     return "month";
@@ -701,9 +698,6 @@ export default function Calendar({
     y: 0,
   });
   const [timeUpdateEvent, setTimeUpdateEvent] = useState(null);
-  const [showGoogleCalendarEvents, setShowGoogleCalendarEvents] = useState(
-    showGoogleCalendarEventsProp
-  );
   const [showPublicEventsOnly, setShowPublicEventsOnly] =
     useState(showPublicOnly);
   const [showRegularEvents, setShowRegularEvents] = useState(
@@ -718,10 +712,6 @@ export default function Calendar({
 
   // Sync state with props
   useEffect(() => {
-    setShowGoogleCalendarEvents(showGoogleCalendarEventsProp);
-  }, [showGoogleCalendarEventsProp]);
-
-  useEffect(() => {
     setShowPublicEventsOnly(showPublicOnly);
   }, [showPublicOnly]);
 
@@ -730,13 +720,6 @@ export default function Calendar({
   }, [showRegularEventsProp]);
 
   // Handle toggle changes
-  const handleGoogleCalendarToggle = (value) => {
-    setShowGoogleCalendarEvents(value);
-    if (onGoogleCalendarToggle) {
-      onGoogleCalendarToggle(value);
-    }
-  };
-
   const handlePublicOnlyToggle = (value) => {
     setShowPublicEventsOnly(value);
     if (onPublicOnlyToggle) {
@@ -754,13 +737,6 @@ export default function Calendar({
       onRegularEventsToggle(value);
     }
   };
-
-  // Google Calendar integration
-  const {
-    integrationStatus,
-    exportEventToGoogle,
-    exportToGoogle,
-  } = useGoogleCalendar();
 
   // Multi-day selection hook
   const {
@@ -1031,11 +1007,6 @@ export default function Calendar({
 
   // First filter events based on the toggle states, then organize by date
   let filteredEventsForCalendar = events.filter((event) => {
-    // Filter out Google Calendar events if toggle is off
-    if (!showGoogleCalendarEvents && event.isGoogleCalendarEvent) {
-      return false;
-    }
-
     // Filter out non-public events if public-only mode is on
     if (showPublicEventsOnly && event.visibility !== "public") {
       return false;
@@ -1269,9 +1240,6 @@ export default function Calendar({
       <div className="flex flex-col lg:flex-row lg:justify-between gap-4">
         {/* Filter controls - full width on mobile */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full lg:w-auto">
-          {/* Google Calendar controls */}
-          {/* Sync functionality removed - only export to Google Calendar is supported */}
-
           {/* Public events only toggle */}
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -1293,7 +1261,7 @@ export default function Calendar({
                 className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
               />
               <span className="text-sm text-gray-600">
-                Include Organization Events
+                Include Business Unit Events
               </span>
             </label>
           )}
@@ -1421,7 +1389,6 @@ export default function Calendar({
               onMonthChange(newMonth);
             }
           }}
-          showGoogleCalendarEvents={showGoogleCalendarEvents}
           showPublicOnly={showPublicEventsOnly}
           highlightedEvents={highlightedEvents}
         />
@@ -1435,7 +1402,6 @@ export default function Calendar({
             setCurrentMonth(DateTime.fromJSDate(newDate))
           }
           onDayClick={handleDayClick}
-          showGoogleCalendarEvents={showGoogleCalendarEvents}
           showPublicOnly={showPublicEventsOnly}
         />
       ) : view === "day" ? (
@@ -1445,7 +1411,6 @@ export default function Calendar({
           onEventClick={setSelectedEvent}
           currentDate={currentMonth}
           onDateChange={setCurrentMonth}
-          showGoogleCalendarEvents={showGoogleCalendarEvents}
           showPublicOnly={showPublicEventsOnly}
         />
       ) : (
@@ -1455,7 +1420,7 @@ export default function Calendar({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search events by title, description, or organization..."
+              placeholder="Search events by title, description, business unit, or location..."
               className="flex-1 px-2 py-1 sm:px-3 sm:py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {searchTerm && highlightedEvents.size > 0 && (
@@ -1656,12 +1621,10 @@ export default function Calendar({
                         const statusColor = statusOption?.color;
 
                         // Only make draggable if it's an external link or notation and user has permissions
-                        // AND not a Google Calendar event
                         const isDraggable =
                           isAdmin &&
                           (ev.type === "external_link" ||
-                            ev.type === "notation") &&
-                          !ev.isGoogleCalendarEvent;
+                            ev.type === "notation");
 
                         // Format time for display if available
                         let timeDisplay = "";
@@ -1728,60 +1691,6 @@ export default function Calendar({
                               highlightedEvents.has(ev.id)
                             )}
                           >
-                            {/* Google Calendar indicator or export button */}
-                            {ev.isGoogleCalendarEvent ? (
-                              <div className="absolute top-0 right-0 sm:top-0.5 sm:right-0.5">
-                                <FaGoogle
-                                  size={6}
-                                  className="text-blue-500 sm:w-2 sm:h-2"
-                                />
-                              </div>
-                            ) : (
-                              !ev.isGoogleCalendarEvent && (
-                                <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    let entityType = "event";
-                                    let entityId = ev.id;
-
-                                    if (ev.type === "external_link") {
-                                      entityType = "external_link";
-                                    } else if (ev.type === "notation") {
-                                      entityType = "notation";
-                                      // Extract the actual notation ID from compound IDs like "eventId-notation-notationId"
-                                      if (ev.notationId) {
-                                        entityId = ev.notationId;
-                                      } else if (
-                                        ev.id &&
-                                        ev.id.includes("-notation-")
-                                      ) {
-                                        // Extract notation ID from compound ID
-                                        const parts = ev.id.split("-notation-");
-                                        entityId = parts[1] || ev.id;
-                                      } else {
-                                        entityId = ev.id;
-                                      }
-                                    }
-
-                                    const success = await exportToGoogle(
-                                      entityType,
-                                      entityId,
-                                      ev
-                                    );
-                                    if (success && onEventUpdate) {
-                                      onEventUpdate();
-                                    }
-                                  }}
-                                  className="absolute top-0 right-0 sm:top-0.5 sm:right-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                                  title="Export to Google Calendar"
-                                >
-                                  <FaUpload
-                                    size={6}
-                                    className="text-gray-400 hover:text-blue-500 sm:w-2 sm:h-2"
-                                  />
-                                </button>
-                              )
-                            )}
                             {/* Status indicator for completed events */}
                             {ev.status?.toLowerCase() === "completed" && (
                               <div className="absolute top-0 left-0 sm:top-0.5 sm:left-0.5 text-white text-[6px] sm:text-[8px] font-bold leading-none">
@@ -1792,8 +1701,7 @@ export default function Calendar({
                             {/* Multi-tag indicator dot for events with multiple tags */}
                             {ev.hasMultipleTags &&
                               ev.tagColors &&
-                              ev.tagColors.length > 1 &&
-                              !ev.isGoogleCalendarEvent && (
+                              ev.tagColors.length > 1 && (
                                 <div className="absolute top-0 right-0 sm:top-0.5 sm:right-0.5 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white/80 rounded-full border border-black/10" />
                               )}
 
@@ -2294,45 +2202,6 @@ export default function Calendar({
             <span>Set Time</span>
           </button>
 
-          {/* Google Calendar export option */}
-          {!contextMenuEvent.isGoogleCalendarEvent && (
-              <button
-                className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-2"
-                onClick={async () => {
-                  // Determine entity type based on the event object
-                  let entityType = "event";
-                  let entityId = contextMenuEvent.id;
-
-                  if (contextMenuEvent.type === "external_link") {
-                    entityType = "external_link";
-                  } else if (contextMenuEvent.type === "notation") {
-                    entityType = "notation";
-                    // Extract the actual notation ID from compound IDs
-                    if (contextMenuEvent.notationId) {
-                      entityId = contextMenuEvent.notationId;
-                    } else if (
-                      contextMenuEvent.id &&
-                      contextMenuEvent.id.includes("-notation-")
-                    ) {
-                      // Extract notation ID from compound ID like "eventId-notation-notationId"
-                      const parts = contextMenuEvent.id.split("-notation-");
-                      entityId = parts[1] || contextMenuEvent.id;
-                    } else {
-                      entityId = contextMenuEvent.id;
-                    }
-                  }
-
-                  const success = await exportToGoogle(entityType, entityId, contextMenuEvent);
-                  if (success && onEventUpdate) {
-                    onEventUpdate();
-                  }
-                  setContextMenuEvent(null);
-                }}
-              >
-                <FaUpload size={14} className="text-blue-500" />
-                <span>Export to Google Calendar</span>
-              </button>
-            )}
         </div>
       )}
 

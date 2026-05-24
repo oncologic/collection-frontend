@@ -36,6 +36,7 @@ import {
   useCreateSocialMediaAssociation,
   useDeleteSocialMediaAssociation,
   useCreateSocialMediaAccount,
+  useSocialMediaAccountTypes,
 } from "@/app/hooks/useSocialMedia";
 import CustomTimePicker from "./CustomTimePicker";
 import { toast } from "react-hot-toast";
@@ -310,17 +311,19 @@ const AddExternalLinkForm = ({
   );
   const [newAccountData, setNewAccountData] = useState({
     platformId: "",
+    accountTypeId: "",
     name: "",
     handle: "",
     url: "",
     description: "",
-    accountType: "foundation",
     visibility: "private",
   });
   const { data: socialMediaData = [], isLoading: isLoadingSocialAccounts } =
     useSocialMediaAccounts(false); // false for unformatted array data
   const { data: platforms = [], isLoading: isLoadingPlatforms } =
     useSocialMediaPlatforms();
+  const { data: accountTypes = [], isLoading: isLoadingAccountTypes } =
+    useSocialMediaAccountTypes();
   const {
     data: associatedSocialAccounts = [],
     isLoading: isLoadingAssociations,
@@ -330,7 +333,7 @@ const AddExternalLinkForm = ({
   );
   const { mutate: createSocialAssociation } = useCreateSocialMediaAssociation();
   const { mutate: deleteSocialAssociation } = useDeleteSocialMediaAssociation();
-  const { mutate: createSocialAccount, isLoading: isCreatingAccount } =
+  const { mutate: createSocialAccount, isPending: isCreatingAccount } =
     useCreateSocialMediaAccount();
 
   // Ensure socialMediaData is an array and enrich with platform info
@@ -389,6 +392,14 @@ const AddExternalLinkForm = ({
       }
     }
   }, [associatedSocialAccounts, isEditMode]);
+
+  useEffect(() => {
+    setNewAccountData((current) => ({
+      ...current,
+      platformId: current.platformId || platforms[0]?.id || "",
+      accountTypeId: current.accountTypeId || accountTypes[0]?.id || "",
+    }));
+  }, [accountTypes, platforms]);
 
   const onSubmitWrapper = async (data) => {
     if (!data) {
@@ -593,6 +604,7 @@ const AddExternalLinkForm = ({
   const handleCreateSocialAccount = () => {
     if (
       !newAccountData.platformId ||
+      !newAccountData.accountTypeId ||
       !newAccountData.name ||
       !newAccountData.url
     ) {
@@ -630,12 +642,12 @@ const AddExternalLinkForm = ({
 
           // Reset form and close
           setNewAccountData({
-            platformId: "",
+            platformId: platforms[0]?.id || "",
+            accountTypeId: accountTypes[0]?.id || "",
             name: "",
             handle: "",
             url: "",
             description: "",
-            accountType: "foundation",
             visibility: "private",
           });
           setShowAddAccountForm(false);
@@ -995,6 +1007,7 @@ const AddExternalLinkForm = ({
               <div className="mt-2">
                 {isLoadingSocialAccounts ||
                 isLoadingPlatforms ||
+                isLoadingAccountTypes ||
                 isLoadingAssociations ? (
                   <p className="text-xs text-gray-500">
                     Loading social media accounts...
@@ -1077,7 +1090,7 @@ const AddExternalLinkForm = ({
                             </select>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2">
+	                          <div className="grid grid-cols-2 gap-2">
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">
                                 Name *
@@ -1138,30 +1151,27 @@ const AddExternalLinkForm = ({
 
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Account Type
-                              </label>
-                              <select
-                                className="w-full text-sm py-1.5 px-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                value={newAccountData.accountType}
-                                onChange={(e) =>
-                                  setNewAccountData({
-                                    ...newAccountData,
-                                    accountType: e.target.value,
-                                  })
-                                }
-                                disabled={isCreatingAccount}
-                              >
-                                <option value="foundation">
-                                  Foundation/Organization
-                                </option>
-                                <option value="medical">
-                                  Healthcare Professional
-                                </option>
-                                <option value="advocate">
-                                  Patient Advocate
-                                </option>
-                              </select>
+	                              <label className="block text-xs font-medium text-gray-700 mb-1">
+	                                Account Type *
+	                              </label>
+	                              <select
+	                                className="w-full text-sm py-1.5 px-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+	                                value={newAccountData.accountTypeId}
+	                                onChange={(e) =>
+	                                  setNewAccountData({
+	                                    ...newAccountData,
+	                                    accountTypeId: e.target.value,
+	                                  })
+	                                }
+	                                disabled={isCreatingAccount}
+	                              >
+	                                <option value="">Select account type</option>
+	                                {accountTypes.map((type) => (
+	                                  <option key={type.id} value={type.id}>
+	                                    {type.name}
+	                                  </option>
+	                                ))}
+	                              </select>
                             </div>
 
                             <div>
@@ -1212,14 +1222,14 @@ const AddExternalLinkForm = ({
                               onClick={() => {
                                 setShowAddAccountForm(false);
                                 setNewAccountData({
-                                  platformId: "",
-                                  name: "",
-                                  handle: "",
-                                  url: "",
-                                  description: "",
-                                  accountType: "foundation",
-                                  visibility: "private",
-                                });
+	                                  platformId: "",
+	                                  accountTypeId: accountTypes[0]?.id || "",
+	                                  name: "",
+	                                  handle: "",
+	                                  url: "",
+	                                  description: "",
+	                                  visibility: "private",
+	                                });
                               }}
                               className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
                               disabled={isCreatingAccount}
@@ -1231,9 +1241,10 @@ const AddExternalLinkForm = ({
                               onClick={handleCreateSocialAccount}
                               disabled={
                                 isCreatingAccount ||
-                                !newAccountData.platformId ||
-                                !newAccountData.name ||
-                                !newAccountData.url
+	                                !newAccountData.platformId ||
+	                                !newAccountData.accountTypeId ||
+	                                !newAccountData.name ||
+	                                !newAccountData.url
                               }
                               className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             >

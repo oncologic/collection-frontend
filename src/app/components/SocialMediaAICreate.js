@@ -481,7 +481,7 @@ const SocialMediaAICreate = ({
                     ref={textareaRef}
                     value={textInput}
                     onChange={handleTextChange}
-                    placeholder="Paste social media information here... Use @ to mention organizations, collections, or links to associate"
+                    placeholder="Paste social media information here... Use @ to mention business units, collections, or links to associate"
                     className="w-full h-64 p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     maxLength={MAX_CHARS}
                   />
@@ -742,7 +742,7 @@ const SocialMediaAICreate = ({
                                 Associations
                               </h4>
                               <MultiSelect
-                                label="Organizations"
+                                label="Business Units"
                                 value={organizations.filter((org) =>
                                   associations[index]?.organizations?.includes(
                                     org.id
@@ -758,7 +758,7 @@ const SocialMediaAICreate = ({
                                 options={organizations}
                                 getOptionLabel={(org) => org.name}
                                 getOptionValue={(org) => org.id}
-                                placeholder="Select organizations..."
+                                placeholder="Select business units..."
                               />
                               <MultiSelect
                                 label="Collections"

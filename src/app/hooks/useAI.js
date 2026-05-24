@@ -6,13 +6,12 @@ import {
   generateResourceChat,
   searchContent,
   processImageOCR,
-  createPaymentIntent,
   fetchTransactionHistory,
   previewStructuredNotations,
   confirmStructuredNotations,
-  addUserCredits,
   fetchUserCreditBalance,
   addCreditsToUser,
+  setUserCreditBalance,
   previewBulkNotationUpdates,
   confirmBulkNotationUpdates,
   previewStructuredEvents,
@@ -168,34 +167,6 @@ export const useCredits = () => {
     },
   });
 
-  const addCredits = useMutation({
-    mutationFn: async ({ amount, stripeTransactionId }) => {
-      const token = await getToken();
-
-      return addUserCredits({ amount, stripeTransactionId, token });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["creditBalance"] });
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Credits added successfully");
-    },
-    onError: (error) => {
-      toast.error("Failed to add credits");
-      console.error("Error adding credits:", error);
-    },
-  });
-
-  const createCheckoutSession = useMutation({
-    mutationFn: async ({ packageId }) => {
-      const token = await getToken();
-      return createPaymentIntent({ packageId, token });
-    },
-    onError: (error) => {
-      toast.error("Failed to create payment session");
-      console.error("Error creating payment session:", error);
-    },
-  });
-
   // Admin functions - only available if user is admin
   const getUserBalance = useMutation({
     mutationFn: async ({ userId }) => {
@@ -239,15 +210,38 @@ export const useCredits = () => {
     },
   });
 
+  const setUserCreditBalanceMutation = useMutation({
+    mutationFn: async ({
+      userId,
+      amount,
+      description = "Admin credit balance adjustment",
+    }) => {
+      if (!isAdmin) {
+        throw new Error("Admin access required");
+      }
+      const token = await getToken();
+      return setUserCreditBalance({ userId, amount, description, token });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["creditBalance"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["userBalance"] });
+      toast.success("Credit balance updated");
+    },
+    onError: (error) => {
+      toast.error("Failed to set credit balance");
+      console.error("Error setting credit balance:", error);
+    },
+  });
+
   return {
     balance,
     transactions,
-    addCredits,
-    createCheckoutSession,
     // Admin functions
     ...(isAdmin && {
       getUserBalance,
       addCreditsToUserAccount,
+      setUserCreditBalance: setUserCreditBalanceMutation,
     }),
   };
 };

@@ -89,6 +89,11 @@ const EventsChat = forwardRef(function EventsChat(
 
   const textareaRef = useRef(null);
   const chatEndRef = useRef(null);
+  const contentSearchMutationRef = useRef(contentSearchMutation);
+
+  useEffect(() => {
+    contentSearchMutationRef.current = contentSearchMutation;
+  }, [contentSearchMutation]);
 
   // Use history prop if provided, otherwise use local history
   const currentHistory = history.length > 0 ? history : localHistory;
@@ -187,7 +192,7 @@ const EventsChat = forwardRef(function EventsChat(
   useEffect(() => {
     if (mentionQuery && mentionQuery.length >= 2) {
       const timeoutId = setTimeout(() => {
-        contentSearchMutation.mutate(
+        contentSearchMutationRef.current.mutate(
           { searchQuery: mentionQuery },
           {
             onSuccess: (data) => {

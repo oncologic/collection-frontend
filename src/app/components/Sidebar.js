@@ -249,9 +249,9 @@ const Sidebar = ({
               isCollapsed={isCollapsed}
             />
             <NavLink
-              href="/organizations"
+              href="/business-units"
               icon={faClipboardList}
-              text="Organizations"
+              text="Business Units"
               isCollapsed={isCollapsed}
             />
             {/* <NavLink

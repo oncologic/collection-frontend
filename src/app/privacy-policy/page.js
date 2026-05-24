@@ -95,16 +95,6 @@ const PrivacyPolicy = () => {
                 </td>
                 <td className="py-2 px-4 border-b">Automated</td>
               </tr>
-              <tr>
-                <td className="py-2 px-4 border-b font-medium">
-                  Payment & Donation Data
-                </td>
-                <td className="py-2 px-4 border-b">
-                  billing address, last 4 digits of card, transaction IDs
-                  (processed via PCI‑compliant provider)
-                </td>
-                <td className="py-2 px-4 border-b">Payment processor</td>
-              </tr>
             </tbody>
           </table>
         </div>

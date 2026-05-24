@@ -140,7 +140,7 @@ const ApplyToOpportunityModal = ({ opportunity, onClose }) => {
               </p>
               {opportunity.organizations?.[0] && (
                 <p>
-                  <span className="font-medium">Organization:</span>{" "}
+                  <span className="font-medium">Business Unit:</span>{" "}
                   {opportunity.organizations[0].name}
                 </p>
               )}
@@ -231,7 +231,7 @@ const ApplyToOpportunityModal = ({ opportunity, onClose }) => {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-xs text-blue-800">
               <strong>Privacy Notice:</strong> Your application will be shared
-              with the opportunity creator and relevant organization
+              with the opportunity creator and relevant business unit
               administrators. They will be able to view your profile information
               and any additional information you provide.
             </p>

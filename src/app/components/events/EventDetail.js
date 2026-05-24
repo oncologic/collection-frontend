@@ -11,14 +11,12 @@ import {
   FaArrowRight,
   FaCalendar,
   FaThumbtack,
-  FaGoogle,
 } from "react-icons/fa";
 import {
   usePinItems,
   useUnpinItems,
   useGetPinnedItems,
 } from "@/app/hooks/usePinned";
-import { useGoogleCalendar } from "@/app/hooks/useGoogleCalendar";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "react-hot-toast";
 
@@ -52,9 +50,6 @@ export const EventDetail = ({
 
   // Add memo to check if event is pinned
   const isPinned = pinnedItems?.some((item) => item.id === event.id);
-
-  // Add Google Calendar hook
-  const { exportToGoogle } = useGoogleCalendar();
 
   const handleSponsorshipClick = () => {
     if (hasBundles && view !== "sponsorship") {
@@ -386,36 +381,6 @@ export const EventDetail = ({
                   isPinned ? "text-blue-400" : "text-gray-300"
                 }`}
               />
-            </button>
-          )}
-
-          {/* Add Google Calendar export button */}
-          {!event.isGoogleCalendarEvent && exportToGoogle && (
-            <button
-              className="px-4 py-2 text-gray-400 hover:text-blue-500 rounded-full hover:bg-blue-50/80 backdrop-blur-sm transition-all duration-200 flex items-center gap-2"
-              onClick={async () => {
-                try {
-                  // Determine entity type
-                  let entityType = 'event';
-                  let entityId = event.id;
-                  
-                  if (isExternal) {
-                    entityType = 'external_link';
-                  }
-                  
-                  const success = await exportToGoogle(entityType, entityId, event);
-                  if (success) {
-                    // Toast is handled in the hook
-                  }
-                } catch (error) {
-                  console.error("Error exporting to Google Calendar:", error);
-                  toast.error("Failed to export to Google Calendar");
-                }
-              }}
-              title="Export to Google Calendar"
-            >
-              <FaGoogle className="w-4 h-4" />
-              <span className="text-sm">Export to Google</span>
             </button>
           )}
 

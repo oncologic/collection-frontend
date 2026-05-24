@@ -370,7 +370,11 @@ export default function SharedContentPage() {
     feedbackAction,
     feedbackNote,
     reviewEmail,
+    data?.metadata?.linkId,
+    data?.metadata?.type,
+    reviewData?.reviewers,
     submitFeedback,
+    submitUserInfo,
   ]);
 
   // Update the submitReview function

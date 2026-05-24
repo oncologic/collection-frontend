@@ -3,7 +3,7 @@ import { DateTime } from "luxon";
 import { STATUS_OPTIONS } from "../forms/AddCollectionForm";
 import { useState, useMemo } from "react";
 import DOMPurify from "dompurify";
-import { FaCalendar, FaList, FaTimes, FaFilter, FaTags, FaGoogle } from "react-icons/fa";
+import { FaCalendar, FaList, FaTimes, FaFilter, FaTags } from "react-icons/fa";
 import CalendarView, { formatTimeDisplay } from "./CalendarView";
 
 // Helper function to strip HTML tags
@@ -561,12 +561,6 @@ const DateEventsModal = ({
                           />
                         </svg>
                         {formatTimeDisplay(event)}
-                        {event.isGoogleCalendarEvent && (
-                          <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full inline-flex items-center gap-1">
-                            <FaGoogle size={8} />
-                            Google
-                          </span>
-                        )}
                       </div>
                     )}
 

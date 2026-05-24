@@ -40,7 +40,7 @@ const calculateSimilarity = (str1, str2) => {
       matrix[i][j] = Math.min(
         matrix[i - 1][j] + 1, // deletion
         matrix[i][j - 1] + 1, // insertion
-        matrix[i - 1][j - 1] + cost // substitution
+        matrix[i - 1][j - 1] + cost, // substitution
       );
     }
   }
@@ -56,8 +56,8 @@ const hasExactWordMatch = (str1, str2) => {
 
   return words1.some((word1) =>
     words2.some(
-      (word2) => word1.length > 3 && word2.length > 3 && word1 === word2
-    )
+      (word2) => word1.length > 3 && word2.length > 3 && word1 === word2,
+    ),
   );
 };
 
@@ -65,13 +65,13 @@ const hasExactWordMatch = (str1, str2) => {
 const hasKeywordMatch = (
   str1,
   str2,
-  keywords = ["tutorial", "guide", "how to", "getting started"]
+  keywords = ["tutorial", "guide", "how to", "getting started"],
 ) => {
   const normalized1 = normalizeText(str1);
   const normalized2 = normalizeText(str2);
 
   return keywords.some(
-    (keyword) => normalized1.includes(keyword) && normalized2.includes(keyword)
+    (keyword) => normalized1.includes(keyword) && normalized2.includes(keyword),
   );
 };
 
@@ -85,7 +85,7 @@ const hasKeywordMatch = (
 export const findMatchingVideos = (
   videos = [],
   tutorialData = {},
-  options = {}
+  options = {},
 ) => {
   const {
     minSimilarity = 0.6,
@@ -256,6 +256,7 @@ export const isValidVideoUrl = (url) => {
 
     // CDN patterns
     /cloudfront\.net.*\.(mp4|mov|webm|avi)/i,
+    /blob\.core\.windows\.net.*\.(mp4|mov|webm|avi)/i,
     /amazonaws\.com.*\.(mp4|mov|webm|avi)/i,
     /storage\.googleapis\.com.*\.(mp4|mov|webm|avi)/i,
 

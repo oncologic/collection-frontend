@@ -3,9 +3,7 @@ import { useContextAuth } from "../context/authContext";
 import {
   getAllPlans,
   getUserSubscription,
-  createStripeSubscription,
   cancelSubscription,
-  reactivateSubscription,
   updateUserSubscription,
   checkSubscriptionStatus,
   getSubscriptionLimits,
@@ -51,30 +49,6 @@ export const useUserSubscription = (options = {}) => {
 };
 
 /**
- * Hook to create a Stripe subscription
- */
-export const useCreateStripeSubscription = (options = {}) => {
-  const { getAuthHeader } = useContextAuth();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ planName }) => {
-      const headers = await getAuthHeader();
-      return createStripeSubscription({ planName }, headers);
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["userSubscription"] });
-      queryClient.invalidateQueries({ queryKey: ["subscriptionStatus"] });
-      toast.success("Subscription created successfully!");
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to create subscription");
-    },
-    ...options,
-  });
-};
-
-/**
  * Hook to cancel subscription
  */
 export const useCancelSubscription = (options = {}) => {
@@ -93,30 +67,6 @@ export const useCancelSubscription = (options = {}) => {
     },
     onError: (error) => {
       toast.error(error.message || "Failed to cancel subscription");
-    },
-    ...options,
-  });
-};
-
-/**
- * Hook to reactivate subscription
- */
-export const useReactivateSubscription = (options = {}) => {
-  const { getAuthHeader } = useContextAuth();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async () => {
-      const headers = await getAuthHeader();
-      return reactivateSubscription(headers);
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["userSubscription"] });
-      queryClient.invalidateQueries({ queryKey: ["subscriptionStatus"] });
-      toast.success("Subscription reactivated successfully!");
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to reactivate subscription");
     },
     ...options,
   });
@@ -255,7 +205,7 @@ export const useDowngradeCleanupSuggestions = (targetPlan, options = {}) => {
 };
 
 /**
- * Enhanced hook that provides subscription state with duplicate payment prevention
+ * Enhanced hook that provides subscription state with duplicate change prevention
  */
 export const useSubscriptionState = () => {
   const { data: userSubscription, isLoading: isLoadingUserSubscription } =

@@ -559,7 +559,7 @@ const ResourcePage = () => {
             expertiseLevels,
             tags,
           ] = await Promise.all([
-            fetch("/api/organizations").then((res) => res.json()),
+            fetch("/api/business-units").then((res) => res.json()),
             fetch("/api/resource-types").then((res) => res.json()),
             fetch("/api/sensitivity-levels").then((res) => res.json()),
             fetch("/api/expertise-levels").then((res) => res.json()),
@@ -959,11 +959,11 @@ const ResourcePage = () => {
                     </span>
                   </div>
 
-                  {/* Organization Information */}
+                  {/* Business Unit Information */}
                   {resource.organizations?.length > 0 && (
                     <div className="border-t border-gray-100 pt-4">
                       <p className="font-semibold text-gray-700 mb-2">
-                        Organization{resource.organizations.length > 1 ? "s" : ""}
+                        Business Unit{resource.organizations.length > 1 ? "s" : ""}
                         :
                       </p>
                       <div className="space-y-2">
@@ -974,7 +974,7 @@ const ResourcePage = () => {
                           >
                             <div>
                               <a
-                                href={`/organizations/${org.id}`}
+                                href={`/business-units/${org.id}`}
                                 className="text-gray-600 hover:text-blue-600 hover:underline transition-colors"
                               >
                                 {org.name}

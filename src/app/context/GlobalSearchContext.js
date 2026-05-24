@@ -12,6 +12,14 @@ import { useRouter } from "next/navigation";
 
 const GlobalSearchContext = createContext();
 
+const areSearchDataRefsEqual = (current, next) =>
+  current?.collections === next?.collections &&
+  current?.resources === next?.resources &&
+  current?.events === next?.events &&
+  current?.externalLinks === next?.externalLinks &&
+  current?.notations === next?.notations &&
+  current?.attachments === next?.attachments;
+
 export function GlobalSearchProvider({ children }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -77,7 +85,7 @@ export function GlobalSearchProvider({ children }) {
         case "attachment":
           if (item.externalLinkId) {
             navigationPromise = router.push(
-              `/external-links/${item.externalLinkId}`
+              `/external-links/${item.externalLinkId}`,
             );
           } else {
             console.warn("Attachment missing externalLinkId:", item);
@@ -107,12 +115,14 @@ export function GlobalSearchProvider({ children }) {
         setIsNavigating(false);
       }, 1500);
     },
-    [router]
+    [router],
   );
 
   // Stable updateSearchData callback - remove from dependencies to prevent circular updates
   const updateSearchData = useCallback((data) => {
-    setSearchData(data);
+    setSearchData((current) =>
+      areSearchDataRefsEqual(current, data) ? current : data,
+    );
   }, []);
 
   // Only include primitive values and stable references in useMemo dependencies
@@ -132,8 +142,9 @@ export function GlobalSearchProvider({ children }) {
       openSearch,
       closeSearch,
       handleSelectItem,
+      searchData,
       updateSearchData, // Include updateSearchData since it's stable with useCallback
-    ]
+    ],
   );
 
   return (
@@ -147,7 +158,7 @@ export function useGlobalSearch() {
   const context = useContext(GlobalSearchContext);
   if (!context) {
     throw new Error(
-      "useGlobalSearch must be used within a GlobalSearchProvider"
+      "useGlobalSearch must be used within a GlobalSearchProvider",
     );
   }
   return context;

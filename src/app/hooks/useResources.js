@@ -245,6 +245,10 @@ export function useGetResoucesByOrganization(organizationId) {
   return { data, isLoading, mutate: refreshOrgResources };
 }
 
+export function useGetResoucesByBusinessUnit(businessUnitId) {
+  return useGetResoucesByOrganization(businessUnitId);
+}
+
 export function useDeleteResource() {
   const queryClient = useQueryClient();
   const { getAuthHeader, systemUser, selectedTenants } = useContextAuth();

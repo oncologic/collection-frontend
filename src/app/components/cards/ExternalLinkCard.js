@@ -71,6 +71,9 @@ const ExternalLinkCard = ({
   const router = useRouter();
   const scheduledStartDate = startDate || date;
   const scheduledEndDate = endDate || startDate || date;
+  const detailsPath = collectionId
+    ? `/external-links/${id}?collectionId=${encodeURIComponent(collectionId)}`
+    : `/external-links/${id}`;
 
   // Add pin-related hooks
   const { mutateAsync: pinItemsAsync } = usePinItems();
@@ -141,7 +144,7 @@ const ExternalLinkCard = ({
           : "";
         path = `/shared/${id}?token=${sharedToken}${emailParam}`;
       } else {
-        path = `/external-links/${id}`;
+        path = detailsPath;
       }
       router.push(path);
     } else {
@@ -377,7 +380,7 @@ const ExternalLinkCard = ({
                         : "";
                       return `/shared/${id}?token=${sharedToken}${emailParam}`;
                     })()
-                  : `/external-links/${id}`
+                  : detailsPath
               }
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-all duration-200 border border-purple-200 hover:border-purple-300"
             >

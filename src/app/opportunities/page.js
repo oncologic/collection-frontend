@@ -138,14 +138,14 @@ export default function OpportunitiesPage() {
   const [selectedOpportunity, setSelectedOpportunity] = useState(null);
   const [applyingToOpportunity, setApplyingToOpportunity] = useState(null);
 
-  // Fetch data - only fetch organizations and tags if user is signed in
+  // Fetch data - only fetch business units and tags if user is signed in
   // For public access, we'll use tags from opportunities
   const { data: organizations = [] } = useOrganizations();
   const { data: tags = [] } = useTags();
 
   const organizationOptions = useMemo(
     () => [
-      { id: "", name: "All Organizations", value: "" },
+      { id: "", name: "All Business Units", value: "" },
       ...organizations.map((org) => ({
         id: org.id,
         name: org.name,
@@ -466,10 +466,10 @@ export default function OpportunitiesPage() {
               />
             </div>
 
-            {/* Organization Filter */}
+            {/* Business Unit Filter */}
             <div>
               <SelectField
-                label="Organization"
+                label="Business Unit"
                 value={selectedOrganizationOption}
                 onChange={(value) =>
                   setSelectedOrganization(

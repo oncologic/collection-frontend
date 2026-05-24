@@ -94,11 +94,11 @@ const SubscribedContentModal = ({ isOpen, onClose }) => {
           {/* Content */}
           <div className="overflow-y-auto p-6 max-h-[calc(90vh-140px)]">
             <div className="space-y-8">
-              {/* Organizations Section */}
+              {/* Business Units Section */}
               {displayOrganizations.length > 0 && (
                 <section>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    Organizations
+                    Business Units
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {displayOrganizations.map((org) => (

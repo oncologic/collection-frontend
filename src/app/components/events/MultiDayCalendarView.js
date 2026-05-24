@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import { DateTime } from "luxon";
-import { FaClock, FaGoogle } from "react-icons/fa";
+import { FaClock } from "react-icons/fa";
 import {
   hasTimeInfo,
   getTimePosition,
@@ -243,16 +243,12 @@ const MultiDayCalendarView = ({
                         const isWaiting = status === "waiting";
                         const isCancelled = status === "cancelled";
 
-                        // Color based on type and source
+                        // Color based on type
                         let bgColor = "bg-gray-100";
                         let textColor = "text-gray-800";
                         let borderColor = "border-gray-300";
 
-                        if (event.isGoogleCalendarEvent) {
-                          bgColor = "bg-blue-50";
-                          textColor = "text-blue-800";
-                          borderColor = "border-blue-300";
-                        } else if (event.type === "external_link") {
+                        if (event.type === "external_link") {
                           bgColor = "bg-indigo-50";
                           textColor = "text-indigo-800";
                           borderColor = "border-indigo-200";
@@ -282,7 +278,6 @@ const MultiDayCalendarView = ({
                             onClick={() => onEventClick && onEventClick(event)}
                           >
                             <div className="font-medium truncate flex items-center gap-1">
-                              {event.isGoogleCalendarEvent && <FaGoogle size={10} className="flex-shrink-0 text-blue-500" />}
                               {event.title || event.name}
                             </div>
                             <div className="text-xs opacity-75 truncate flex items-center gap-1">
@@ -342,7 +337,6 @@ const MultiDayCalendarView = ({
                                 }
                               >
                                 <div className="font-medium flex items-center gap-1">
-                                  {event.isGoogleCalendarEvent && <FaGoogle size={10} className="flex-shrink-0 text-blue-500" />}
                                   {event.title || event.name}
                                 </div>
                                 <div className="text-xs text-gray-500 mt-1 truncate">
@@ -505,16 +499,12 @@ const MultiDayCalendarView = ({
                         const isWaiting = status === "waiting";
                         const isCancelled = status === "cancelled";
 
-                        // Color based on type and source
+                        // Color based on type
                         let bgColor = "bg-gray-100";
                         let textColor = "text-gray-800";
                         let borderColor = "border-gray-300";
 
-                        if (event.isGoogleCalendarEvent) {
-                          bgColor = "bg-blue-50";
-                          textColor = "text-blue-800";
-                          borderColor = "border-blue-300";
-                        } else if (event.type === "external_link") {
+                        if (event.type === "external_link") {
                           bgColor = "bg-indigo-50";
                           textColor = "text-indigo-800";
                           borderColor = "border-indigo-200";
@@ -544,7 +534,6 @@ const MultiDayCalendarView = ({
                             onClick={() => onEventClick && onEventClick(event)}
                           >
                             <div className="font-medium truncate flex items-center gap-1">
-                              {event.isGoogleCalendarEvent && <FaGoogle size={10} className="flex-shrink-0 text-blue-500" />}
                               {event.title || event.name}
                             </div>
                             <div className="text-xs opacity-75 truncate flex items-center gap-1">

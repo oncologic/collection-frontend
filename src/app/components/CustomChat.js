@@ -27,6 +27,11 @@ import {
   FaFileAlt,
   FaDownload,
   FaShareAlt,
+  FaMagic,
+  FaChalkboard,
+  FaSave,
+  FaSpinner,
+  FaShoppingCart,
 } from "react-icons/fa";
 import { FiSend } from "react-icons/fi";
 import InputField from "./inputs/InputField";
@@ -43,6 +48,98 @@ import GuidedIndicator from "./tour/GuidedIndicator";
 import InsufficientCreditsModal from "./InsufficientCreditsModal";
 import { useContentSearch } from "../hooks/useAI";
 import ChatExportModal from "./ChatExportModal";
+import ExternalLinkWhiteboard from "./ExternalLinkWhiteboard";
+import Modal from "./Modal";
+import { stripHtmlToText } from "../utils/sanitizeHtml";
+import {
+  updateCollection,
+  updateExternalLinkWhiteboard,
+} from "../api/collectionsApi";
+
+const CHAT_WHITEBOARD_STORAGE_KEY = "chatPromptWhiteboard";
+const WHITEBOARD_ELEMENT_LIMIT = 60;
+
+const parseWhiteboardData = (whiteboardData) => {
+  if (!whiteboardData) return null;
+  if (typeof whiteboardData === "string") {
+    try {
+      return JSON.parse(whiteboardData);
+    } catch (error) {
+      console.error("Failed to parse chat whiteboard data:", error);
+      return null;
+    }
+  }
+  return whiteboardData;
+};
+
+const getVisibleWhiteboardElements = (whiteboardData) => {
+  const parsed = parseWhiteboardData(whiteboardData);
+  return Array.isArray(parsed?.elements)
+    ? parsed.elements.filter((element) => element && !element.isDeleted)
+    : [];
+};
+
+const hasWhiteboardContent = (whiteboardData) =>
+  getVisibleWhiteboardElements(whiteboardData).length > 0;
+
+const getItemTitle = (item) =>
+  stripHtmlToText(item?.title || item?.name || item?.label || item?.url || "") ||
+  "Untitled";
+
+const getItemDescription = (item, fallback = "") =>
+  stripHtmlToText(item?.description || item?.notes || "") || fallback;
+
+const summarizeWhiteboardData = (whiteboardData) => {
+  const parsed = parseWhiteboardData(whiteboardData);
+  const elements = getVisibleWhiteboardElements(parsed);
+  if (elements.length === 0) return "";
+
+  const typeCounts = elements.reduce((acc, element) => {
+    const type = element.type || "unknown";
+    acc[type] = (acc[type] || 0) + 1;
+    return acc;
+  }, {});
+  const textElements = elements
+    .filter((element) => typeof element.text === "string" && element.text.trim())
+    .slice(0, 8)
+    .map((element) => element.text.trim());
+  const typeSummary = Object.entries(typeCounts)
+    .map(([type, count]) => `${count} ${type}`)
+    .join(", ");
+
+  return [
+    `Whiteboard contains ${elements.length} visible element${
+      elements.length === 1 ? "" : "s"
+    }${typeSummary ? ` (${typeSummary})` : ""}.`,
+    textElements.length > 0 ? `Text on board: ${textElements.join(" | ")}` : "",
+    parsed?.updatedAt ? `Last updated: ${parsed.updatedAt}.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+};
+
+const buildWhiteboardChatPayload = (whiteboardData, attachments = {}) => {
+  const parsed = parseWhiteboardData(whiteboardData);
+  const elements = getVisibleWhiteboardElements(parsed);
+  if (elements.length === 0) return null;
+
+  return {
+    id: "chat-prompt-whiteboard",
+    title: "Prompt whiteboard",
+    summary: summarizeWhiteboardData(parsed),
+    attachments,
+    elements: elements.slice(0, WHITEBOARD_ELEMENT_LIMIT).map((element) => ({
+      id: element.id,
+      type: element.type,
+      text: element.text || undefined,
+      x: Math.round(Number(element.x) || 0),
+      y: Math.round(Number(element.y) || 0),
+      width: Math.round(Number(element.width) || 0),
+      height: Math.round(Number(element.height) || 0),
+    })),
+    omittedElementCount: Math.max(0, elements.length - WHITEBOARD_ELEMENT_LIMIT),
+  };
+};
 
 const CustomChat = forwardRef(
   (
@@ -61,6 +158,8 @@ const CustomChat = forwardRef(
       pinnedItems = [],
       enableTypingAnimation = true,
       onBeforeSend,
+      onOpenWorkflowPlanner,
+      onOpenCollectionPlan,
     },
     ref,
   ) => {
@@ -76,6 +175,7 @@ const CustomChat = forwardRef(
     const [showUserDetails, setShowUserDetails] = useState(false);
     const [showResourceSearch, setShowResourceSearch] = useState(false);
     const [selectedResources, setSelectedResources] = useState([]);
+    const [collectionCartItems, setCollectionCartItems] = useState([]);
     const [isClient, setIsClient] = useState(false);
     const [showCreditEstimator, setShowCreditEstimator] = useState(false);
     const [copySuccess, setCopySuccess] = useState(false);
@@ -84,6 +184,8 @@ const CustomChat = forwardRef(
     const [searchType, setSearchType] = useState(null);
     const [searchResults, setSearchResults] = useState([]);
     const [showSearchModal, setShowSearchModal] = useState(false);
+    const [showCollectionCartSearchModal, setShowCollectionCartSearchModal] =
+      useState(false);
     const [searchFilter, setSearchFilter] = useState("");
     const [lastClickTime, setLastClickTime] = useState(0);
     const [isHovering, setIsHovering] = useState(false);
@@ -95,6 +197,25 @@ const CustomChat = forwardRef(
       enableTypingAnimation,
     );
     const [showExportModal, setShowExportModal] = useState(false);
+    const [showWhiteboardPanel, setShowWhiteboardPanel] = useState(false);
+    const [chatWhiteboardData, setChatWhiteboardData] = useState(null);
+    const [includeWhiteboardInChat, setIncludeWhiteboardInChat] = useState(true);
+    const [attachWhiteboardToCollection, setAttachWhiteboardToCollection] =
+      useState(false);
+    const [attachWhiteboardToExternalLink, setAttachWhiteboardToExternalLink] =
+      useState(false);
+    const [whiteboardCollectionId, setWhiteboardCollectionId] = useState("");
+    const [whiteboardExternalLinkId, setWhiteboardExternalLinkId] =
+      useState("");
+    const [isSavingWhiteboardAttachments, setIsSavingWhiteboardAttachments] =
+      useState(false);
+    const [pendingWorkflowSuggestion, setPendingWorkflowSuggestion] =
+      useState(null);
+    const [pendingCollectionPlanSuggestion, setPendingCollectionPlanSuggestion] =
+      useState(null);
+    const [attachWhiteboardToWorkflowProject, setAttachWhiteboardToWorkflowProject] =
+      useState(true);
+    const [collectionPlanSelections, setCollectionPlanSelections] = useState({});
 
     // @ Mention functionality state
     const [showMentionDropdown, setShowMentionDropdown] = useState(false);
@@ -109,6 +230,11 @@ const CustomChat = forwardRef(
     // Search-based mentions
     const [mentionSearchResults, setMentionSearchResults] = useState([]);
     const contentSearchMutation = useContentSearch();
+    const contentSearchMutationRef = useRef(contentSearchMutation);
+
+    useEffect(() => {
+      contentSearchMutationRef.current = contentSearchMutation;
+    }, [contentSearchMutation]);
 
     // Initialize selectedResources from localStorage after component mounts
     useEffect(() => {
@@ -135,14 +261,14 @@ const CustomChat = forwardRef(
           setTypingAnimationEnabled(false);
         }
       }
-    }, []); // Only run on mount
+    }, [history]);
 
     // Debounced search for mention dropdown
     useEffect(() => {
       if (mentionQuery && mentionQuery.length >= 2) {
         // Debounce the search
         const timeoutId = setTimeout(() => {
-          contentSearchMutation.mutate(
+          contentSearchMutationRef.current.mutate(
             { searchQuery: mentionQuery },
             {
               onSuccess: (data) => {
@@ -200,7 +326,9 @@ const CustomChat = forwardRef(
               },
               onError: (error) => {
                 console.error("Failed to search for mentions:", error);
-                setMentionSearchResults([]);
+                setMentionSearchResults((current) =>
+                  current.length > 0 ? [] : current,
+                );
               },
             },
           );
@@ -209,7 +337,9 @@ const CustomChat = forwardRef(
         return () => clearTimeout(timeoutId);
       } else {
         // Clear results if query is too short
-        setMentionSearchResults([]);
+        setMentionSearchResults((current) =>
+          current.length > 0 ? [] : current,
+        );
       }
     }, [mentionQuery]);
 
@@ -314,6 +444,88 @@ const CustomChat = forwardRef(
       chatData?.externalLinks,
       chatData?.linkGroups,
     ]);
+
+    useEffect(() => {
+      if (typeof window === "undefined") return;
+      const storedWhiteboard = window.localStorage.getItem(
+        CHAT_WHITEBOARD_STORAGE_KEY,
+      );
+      if (storedWhiteboard) {
+        setChatWhiteboardData(parseWhiteboardData(storedWhiteboard));
+      }
+    }, []);
+
+    const whiteboardHasContent = useMemo(
+      () => hasWhiteboardContent(chatWhiteboardData),
+      [chatWhiteboardData],
+    );
+    const whiteboardSummary = useMemo(
+      () => summarizeWhiteboardData(chatWhiteboardData),
+      [chatWhiteboardData],
+    );
+
+    const whiteboardCollectionOptions = useMemo(() => {
+      const byId = new Map();
+      const addCollection = (item) => {
+        if (!item) return;
+        const id = item.id || item.collectionId;
+        if (!id || byId.has(id)) return;
+        byId.set(id, {
+          id,
+          label: getItemTitle(item),
+        });
+      };
+
+      allCollections?.forEach(addCollection);
+      chatData?.collections?.forEach(addCollection);
+      selectedResources
+        .filter((item) => item.type === "collection")
+        .forEach(addCollection);
+      mentionedItems
+        .filter((item) => item.type === "collection")
+        .forEach(addCollection);
+
+      return Array.from(byId.values()).sort((a, b) =>
+        a.label.localeCompare(b.label),
+      );
+    }, [allCollections, chatData?.collections, selectedResources, mentionedItems]);
+
+    const whiteboardExternalLinkOptions = useMemo(() => {
+      const byId = new Map();
+      const addExternalLink = (item) => {
+        if (!item) return;
+        const id = item.externalLinkId || item.id;
+        const isExternalLink =
+          item.type === "external_link" ||
+          item.type === "link" ||
+          Boolean(item.externalLinkId);
+        if (!id || !isExternalLink || byId.has(id)) return;
+        byId.set(id, {
+          id,
+          label: getItemTitle(item),
+        });
+      };
+
+      chatData?.externalLinks?.forEach(addExternalLink);
+      selectedResources.forEach(addExternalLink);
+      mentionedItems.forEach(addExternalLink);
+
+      return Array.from(byId.values()).sort((a, b) =>
+        a.label.localeCompare(b.label),
+      );
+    }, [chatData?.externalLinks, selectedResources, mentionedItems]);
+
+    useEffect(() => {
+      if (!whiteboardCollectionId && whiteboardCollectionOptions.length > 0) {
+        setWhiteboardCollectionId(whiteboardCollectionOptions[0].id);
+      }
+    }, [whiteboardCollectionId, whiteboardCollectionOptions]);
+
+    useEffect(() => {
+      if (!whiteboardExternalLinkId && whiteboardExternalLinkOptions.length > 0) {
+        setWhiteboardExternalLinkId(whiteboardExternalLinkOptions[0].id);
+      }
+    }, [whiteboardExternalLinkId, whiteboardExternalLinkOptions]);
 
     // Auto scroll to bottom when new messages arrive
     // useEffect(() => {
@@ -651,12 +863,29 @@ const CustomChat = forwardRef(
     // Helper function to normalize item structure (same as SearchModal)
     const normalizeItem = (item) => {
       const base = {
-        id: item.id,
+        ...item,
+        id: item.id || item.externalLinkId || item.external_link_id,
         title: item.title || item.name,
-        description: item.description,
+        name: item.name || item.title,
+        description: item.description || item.notes,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
         type: item.type,
+        url: item.url,
+        notes: item.notes,
+        date: item.date,
+        startDate: item.startDate || item.start_date || item.date,
+        endDate: item.endDate || item.end_date,
+        startTime: item.startTime || item.start_time || item.time,
+        endTime: item.endTime || item.end_time,
+        timezone: item.timezone,
+        collectionId: item.collectionId || item.collection_id,
+        collectionExternalLinkId:
+          item.collectionExternalLinkId || item.collection_external_link_id,
+        sourceCollectionId: item.sourceCollectionId || item.source_collection_id,
+        sourceCollectionName:
+          item.sourceCollectionName || item.source_collection_name,
+        workflowMetadata: item.workflowMetadata || item.workflow_metadata,
       };
 
       // Handle different item types
@@ -669,6 +898,10 @@ const CustomChat = forwardRef(
             category: item.category,
             visibility: item.visibility,
             highlighted: item.highlighted,
+            hashtags: item.hashtags,
+            imageUrl: item.imageUrl || item.image_url,
+            imageMetadata: item.imageMetadata || item.image_metadata,
+            whiteboardData: item.whiteboardData || item.whiteboard_data,
           };
         case "collection":
           return {
@@ -679,6 +912,7 @@ const CustomChat = forwardRef(
             color: item.color,
             resource_count: item.resource_count,
             is_pinned: item.is_pinned,
+            workflowMetadata: item.workflowMetadata || item.workflow_metadata,
           };
         case "notation":
           return {
@@ -823,6 +1057,432 @@ const CustomChat = forwardRef(
       };
     };
 
+    const handleChatWhiteboardSave = async (whiteboardData) => {
+      setChatWhiteboardData(whiteboardData);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          CHAT_WHITEBOARD_STORAGE_KEY,
+          JSON.stringify(whiteboardData),
+        );
+      }
+    };
+
+    const getWhiteboardAttachmentSummary = () => ({
+      collections:
+        attachWhiteboardToCollection && whiteboardCollectionId
+          ? [
+              whiteboardCollectionOptions.find(
+                (item) => item.id === whiteboardCollectionId,
+              ) || { id: whiteboardCollectionId, label: "Selected collection" },
+            ]
+          : [],
+      externalLinks:
+        attachWhiteboardToExternalLink && whiteboardExternalLinkId
+          ? [
+              whiteboardExternalLinkOptions.find(
+                (item) => item.id === whiteboardExternalLinkId,
+              ) || {
+                id: whiteboardExternalLinkId,
+                label: "Selected external link",
+              },
+            ]
+          : [],
+    });
+
+    const getActiveWhiteboardChatPayload = () => {
+      if (!includeWhiteboardInChat || !whiteboardHasContent) return null;
+      return buildWhiteboardChatPayload(
+        chatWhiteboardData,
+        getWhiteboardAttachmentSummary(),
+      );
+    };
+
+    const handleSaveWhiteboardAttachments = async () => {
+      if (!whiteboardHasContent) {
+        toast.error("Add something to the whiteboard before saving it");
+        return;
+      }
+
+      if (!attachWhiteboardToCollection && !attachWhiteboardToExternalLink) {
+        toast.error("Choose a collection or external link to attach it to");
+        return;
+      }
+
+      if (attachWhiteboardToCollection && !whiteboardCollectionId) {
+        toast.error("Choose a collection for the whiteboard");
+        return;
+      }
+
+      if (attachWhiteboardToExternalLink && !whiteboardExternalLinkId) {
+        toast.error("Choose an external link for the whiteboard");
+        return;
+      }
+
+      setIsSavingWhiteboardAttachments(true);
+      try {
+        const headers = await authContext?.getAuthHeader?.();
+        if (!headers) {
+          throw new Error("Missing authentication headers");
+        }
+
+        const saves = [];
+        if (attachWhiteboardToCollection) {
+          saves.push(
+            updateCollection(
+              whiteboardCollectionId,
+              { whiteboardData: chatWhiteboardData },
+              headers,
+            ),
+          );
+        }
+        if (attachWhiteboardToExternalLink) {
+          saves.push(
+            updateExternalLinkWhiteboard(
+              whiteboardExternalLinkId,
+              chatWhiteboardData,
+              headers,
+            ),
+          );
+        }
+
+        await Promise.all(saves);
+        toast.success("Whiteboard attached");
+      } catch (error) {
+        console.error("Failed to attach whiteboard:", error);
+        toast.error(error?.message || "Failed to attach whiteboard");
+      } finally {
+        setIsSavingWhiteboardAttachments(false);
+      }
+    };
+
+    const handleWorkflowSuggestionReview = (suggestion) => {
+      if (!onOpenWorkflowPlanner) return;
+      if (!whiteboardHasContent) {
+        onOpenWorkflowPlanner(suggestion);
+        return;
+      }
+
+      setAttachWhiteboardToWorkflowProject(true);
+      setPendingWorkflowSuggestion(suggestion);
+    };
+
+    const continueWorkflowSuggestion = (includeWhiteboard) => {
+      const suggestion = pendingWorkflowSuggestion;
+      if (!suggestion) return;
+
+      if (includeWhiteboard) {
+        onOpenWorkflowPlanner?.({
+          ...suggestion,
+          whiteboardAttachment: {
+            whiteboardData: chatWhiteboardData,
+            summary: whiteboardSummary,
+            attachToProject: attachWhiteboardToWorkflowProject,
+            attachments: getWhiteboardAttachmentSummary(),
+          },
+        });
+      } else {
+        onOpenWorkflowPlanner?.(suggestion);
+      }
+
+      setPendingWorkflowSuggestion(null);
+    };
+
+    const getCollectionPlanEntryKey = (entry) =>
+      String(
+        entry?.id ||
+          entry?.timestamp ||
+          entry?.collectionPlanSuggestion?.prompt ||
+          "collection-plan",
+      );
+
+    const getCollectionPlanItemIds = (items = []) =>
+      items.map((item) => item?.id).filter(Boolean);
+
+    const getDefaultCollectionPlanSelection = (suggestion = {}) => ({
+      externalLinkIds: getCollectionPlanItemIds(suggestion.externalLinks || []),
+      collectionIds: getCollectionPlanItemIds(suggestion.collections || []),
+      templateIds: getCollectionPlanItemIds(suggestion.templates || []),
+    });
+
+    const getCollectionPlanSelectionForEntry = (entry) => {
+      const key = getCollectionPlanEntryKey(entry);
+      return (
+        collectionPlanSelections[key] ||
+        getDefaultCollectionPlanSelection(entry?.collectionPlanSuggestion)
+      );
+    };
+
+    const toggleCollectionPlanOption = (entry, optionType, itemId) => {
+      if (!itemId) return;
+      const key = getCollectionPlanEntryKey(entry);
+      const fieldByType = {
+        externalLink: "externalLinkIds",
+        collection: "collectionIds",
+        template: "templateIds",
+      };
+      const field = fieldByType[optionType];
+      if (!field) return;
+
+      setCollectionPlanSelections((prev) => {
+        const current =
+          prev[key] ||
+          getDefaultCollectionPlanSelection(entry?.collectionPlanSuggestion);
+        const nextIds = new Set(current[field] || []);
+
+        if (nextIds.has(itemId)) {
+          nextIds.delete(itemId);
+        } else {
+          nextIds.add(itemId);
+        }
+
+        return {
+          ...prev,
+          [key]: {
+            ...current,
+            [field]: Array.from(nextIds),
+          },
+        };
+      });
+    };
+
+    const buildSelectedCollectionPlanSuggestion = (entry) => {
+      const suggestion = entry?.collectionPlanSuggestion;
+      if (!suggestion) return null;
+
+      const selection = getCollectionPlanSelectionForEntry(entry);
+      const selectedExternalLinkIds = new Set(selection.externalLinkIds || []);
+      const selectedCollectionIds = new Set(selection.collectionIds || []);
+      const selectedTemplateIds = new Set(selection.templateIds || []);
+      const selectedExternalLinks = (suggestion.externalLinks || []).filter((item) =>
+        selectedExternalLinkIds.has(item.id),
+      );
+      const selectedCollections = (suggestion.collections || []).filter((item) =>
+        selectedCollectionIds.has(item.id),
+      );
+      const selectedTemplates = (suggestion.templates || []).filter((item) =>
+        selectedTemplateIds.has(item.id),
+      );
+
+      return {
+        ...suggestion,
+        collections: selectedCollections,
+        templates: selectedTemplates,
+        selectedExternalLinks,
+        resources: [],
+        selectedExternalLinkIds: Array.from(selectedExternalLinkIds),
+        selectedCollectionIds: Array.from(selectedCollectionIds),
+        selectedTemplateIds: Array.from(selectedTemplateIds),
+      };
+    };
+
+    const handleCollectionPlanSuggestionReview = (suggestion) => {
+      if (!onOpenCollectionPlan) return;
+      if (!whiteboardHasContent) {
+        onOpenCollectionPlan(suggestion);
+        return;
+      }
+
+      setAttachWhiteboardToWorkflowProject(true);
+      setPendingCollectionPlanSuggestion(suggestion);
+    };
+
+    const continueCollectionPlanSuggestion = (includeWhiteboard) => {
+      const suggestion = pendingCollectionPlanSuggestion;
+      if (!suggestion) return;
+
+      if (includeWhiteboard) {
+        onOpenCollectionPlan?.({
+          ...suggestion,
+          whiteboardAttachment: {
+            whiteboardData: chatWhiteboardData,
+            summary: whiteboardSummary,
+            attachToProject: attachWhiteboardToWorkflowProject,
+            attachments: getWhiteboardAttachmentSummary(),
+          },
+        });
+      } else {
+        onOpenCollectionPlan?.(suggestion);
+      }
+
+      setPendingCollectionPlanSuggestion(null);
+    };
+
+    const normalizeCartType = (type) =>
+      type === "link" || type === "externalLink"
+        ? "external_link"
+        : type === "workflow_template"
+          ? "collection"
+          : type;
+
+    const getCollectionCartItemKey = (item = {}) => {
+      const type = normalizeCartType(item.type || item.originalType || "item");
+      const id =
+        item.selectionKey ||
+        item.collectionExternalLinkId ||
+        item.collection_external_link_id ||
+        item.externalLinkId ||
+        item.external_link_id ||
+        item.collectionId ||
+        item.collection_id ||
+        item.id ||
+        stripHtmlToText(item.title || item.name || item.label || "");
+
+      return `${type}:${id}`;
+    };
+
+    const isTemplateCollectionItem = (item = {}) => {
+      const metadata = item.workflowMetadata || item.workflow_metadata || {};
+      const kind = String(metadata.kind || "").toLowerCase();
+      return (
+        kind === "template" ||
+        kind === "workflow_template" ||
+        item.originalType === "workflow_template" ||
+        item.type === "workflow_template"
+      );
+    };
+
+    const normalizeCollectionCartItem = (item = {}) => {
+      const type = normalizeCartType(item.type);
+      if (!["collection", "external_link", "resource"].includes(type)) return null;
+
+      const title =
+        stripHtmlToText(item.title || item.name || item.label || item.url || "") ||
+        (type === "collection"
+          ? "Untitled collection"
+          : type === "resource"
+            ? "Untitled resource"
+            : "Untitled external link");
+      const description = getItemDescription(item);
+
+      return {
+        ...item,
+        originalType: item.originalType || item.type,
+        type,
+        id:
+          item.id ||
+          item.externalLinkId ||
+          item.external_link_id ||
+          item.collectionId ||
+          item.collection_id ||
+          title,
+        title,
+        name: item.name || title,
+        description,
+        notes: stripHtmlToText(item.notes || ""),
+        url: item.url || "",
+        date: item.date || item.startDate || item.start_date || null,
+        startDate: item.startDate || item.start_date || item.date || null,
+        endDate: item.endDate || item.end_date || item.startDate || item.date || null,
+        startTime: item.startTime || item.start_time || item.time || null,
+        endTime: item.endTime || item.end_time || null,
+        timezone: item.timezone || null,
+        collectionId: item.collectionId || item.collection_id || null,
+        collectionExternalLinkId:
+          item.collectionExternalLinkId || item.collection_external_link_id || null,
+        sourceCollectionId: item.sourceCollectionId || item.source_collection_id || null,
+        sourceCollectionName:
+          item.sourceCollectionName || item.source_collection_name || null,
+        workflowMetadata: item.workflowMetadata || item.workflow_metadata || {},
+        isTemplate: type === "collection" ? isTemplateCollectionItem(item) : false,
+      };
+    };
+
+    const addToCollectionCart = (itemOrItems) => {
+      const normalizedItems = (Array.isArray(itemOrItems) ? itemOrItems : [itemOrItems])
+        .map(normalizeCollectionCartItem)
+        .filter(Boolean);
+
+      if (normalizedItems.length === 0) {
+        toast.error("Only collections, external links, and resources can be added");
+        return;
+      }
+
+      const existingKeys = new Set(collectionCartItems.map(getCollectionCartItemKey));
+      const newItems = normalizedItems.filter(
+        (item) => !existingKeys.has(getCollectionCartItemKey(item)),
+      );
+
+      if (newItems.length === 0) {
+        toast("Already in collection cart");
+        return;
+      }
+
+      setCollectionCartItems((prev) => {
+        const seen = new Set(prev.map(getCollectionCartItemKey));
+        const next = [...prev];
+        newItems.forEach((item) => {
+          const key = getCollectionCartItemKey(item);
+          if (!seen.has(key)) {
+            seen.add(key);
+            next.push(item);
+          }
+        });
+        return next;
+      });
+
+      toast.success(
+        newItems.length === 1
+          ? "Added to collection cart"
+          : `${newItems.length} items added to collection cart`,
+      );
+    };
+
+    const removeFromCollectionCart = (item) => {
+      const key = getCollectionCartItemKey(item);
+      setCollectionCartItems((prev) =>
+        prev.filter((cartItem) => getCollectionCartItemKey(cartItem) !== key),
+      );
+    };
+
+    const clearCollectionCart = () => {
+      setCollectionCartItems([]);
+      toast.success("Collection cart cleared");
+    };
+
+    const handleCheckoutCollectionCart = () => {
+      if (!onOpenCollectionPlan) {
+        toast.error("Collection builder is not available here");
+        return;
+      }
+
+      const cartItems = collectionCartItems
+        .map(normalizeCollectionCartItem)
+        .filter(Boolean);
+      if (cartItems.length === 0) {
+        toast.error("Add at least one external link or collection first");
+        return;
+      }
+
+      const collections = cartItems.filter((item) => item.type === "collection");
+      const externalLinks = cartItems.filter(
+        (item) => item.type === "external_link",
+      );
+      const resources = cartItems.filter((item) => item.type === "resource");
+      const promptText =
+        stripHtmlToText(query || "") ||
+        stripHtmlToText(history?.at(-1)?.prompt || "") ||
+        "Collection from chat";
+
+      handleCollectionPlanSuggestionReview({
+        prompt: promptText,
+        title: "Collection from chat",
+        summary: `${collections.length} collection${
+          collections.length === 1 ? "" : "s"
+        }, ${externalLinks.length} external link${
+          externalLinks.length === 1 ? "" : "s"
+        }, and ${resources.length} resource${
+          resources.length === 1 ? "" : "s"
+        } selected from chat.`,
+        source: "chat_collection_cart",
+        collections,
+        templates: collections.filter(isTemplateCollectionItem),
+        resources,
+        selectedResources: resources,
+        externalLinks,
+        selectedExternalLinks: externalLinks,
+      });
+    };
+
     const handleSendMessage = async () => {
       if (!query.trim() || isLoading) return;
 
@@ -861,6 +1521,7 @@ const CustomChat = forwardRef(
       // Determine if we should use mentions or regular selected resources
       const usesMentions = mentionedItems.length > 0;
       const itemsToUse = usesMentions ? mentionedItems : selectedResources;
+      const whiteboardPayload = getActiveWhiteboardChatPayload();
 
       if (onBeforeSend) {
         let handled = false;
@@ -871,6 +1532,7 @@ const CustomChat = forwardRef(
             cleanQuery,
             selectedResources: itemsToUse,
             mentionedItems,
+            whiteboard: whiteboardPayload,
           });
 
           if (handled) {
@@ -892,6 +1554,7 @@ const CustomChat = forwardRef(
           resources: itemsToUse,
           prompt: cleanQuery,
           userInfo: getUserInfoString(customUserData, includeUserInfo),
+          whiteboard: whiteboardPayload,
         }),
       );
 
@@ -931,6 +1594,8 @@ const CustomChat = forwardRef(
               notations: [],
               attachments: [],
               socialMediaAccounts: [],
+              whiteboards: whiteboardPayload ? [whiteboardPayload] : [],
+              whiteboardContext: whiteboardPayload?.summary,
               prompt: fullPrompt,
               useVectorSearch: true,
               userProfileData: customUserData, // Include user profile data for context
@@ -970,6 +1635,8 @@ const CustomChat = forwardRef(
               socialMediaAccounts: itemsToUse
                 .filter((r) => r.type === "social_media_account")
                 .map((r) => r.id),
+              whiteboards: whiteboardPayload ? [whiteboardPayload] : [],
+              whiteboardContext: whiteboardPayload?.summary,
               prompt: fullPrompt,
               // Disable RAG when we have specific items selected (either mentions or resources)
               disableRAG: usesMentions || selectedResources.length > 0,
@@ -1081,7 +1748,7 @@ const CustomChat = forwardRef(
         chips.push({
           id: "all-organizations",
           type: "organization",
-          label: "All Organizations",
+          label: "All Business Units",
           count: allOrganizations.length,
         });
       }
@@ -1290,6 +1957,174 @@ const CustomChat = forwardRef(
       };
     }, [showUserDetails]);
 
+    const renderCollectionPlanSuggestionCard = (entry) => {
+      const suggestion = entry.collectionPlanSuggestion;
+      if (!suggestion) return null;
+
+      const selection = getCollectionPlanSelectionForEntry(entry);
+      const selectedExternalLinkIds = new Set(selection.externalLinkIds || []);
+      const selectedCollectionIds = new Set(selection.collectionIds || []);
+      const selectedTemplateIds = new Set(selection.templateIds || []);
+      const visibleCollections = (suggestion.collections || []).slice(0, 3);
+      const visibleExternalLinks = (suggestion.externalLinks || []).slice(0, 4);
+      const selectedExternalLinks = (suggestion.externalLinks || []).filter((item) =>
+        selectedExternalLinkIds.has(item.id),
+      );
+      const selectedCollections = (suggestion.collections || []).filter((item) =>
+        selectedCollectionIds.has(item.id),
+      );
+      const selectedTemplates = (suggestion.templates || []).filter((item) =>
+        selectedTemplateIds.has(item.id),
+      );
+      const selectedTotal =
+        selectedExternalLinks.length +
+        selectedCollections.length +
+        selectedTemplates.length;
+
+      return (
+        <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/80 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-medium text-blue-700">
+                <FaFolder className="h-4 w-4 flex-shrink-0" />
+                <span>Project collection starter</span>
+              </div>
+              <h3 className="mt-1 line-clamp-2 text-base font-semibold text-gray-900">
+                {stripHtmlToText(suggestion.title || "") ||
+                  "Suggested collection plan"}
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-gray-700">
+                {stripHtmlToText(suggestion.summary || suggestion.reason || "")}
+              </p>
+
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-600">
+                {suggestion.templates?.length > 0 && (
+                  <span className="rounded-full border border-blue-100 bg-white px-2.5 py-1">
+                    {suggestion.templates.length} template
+                    {suggestion.templates.length === 1 ? "" : "s"}
+                  </span>
+                )}
+                {suggestion.collections?.length > 0 && (
+                  <span className="rounded-full border border-blue-100 bg-white px-2.5 py-1">
+                    {selectedCollections.length} of{" "}
+                    {suggestion.collections.length} collection
+                    {suggestion.collections.length === 1 ? "" : "s"} selected
+                  </span>
+                )}
+                {suggestion.externalLinks?.length > 0 && (
+                  <span className="rounded-full border border-blue-100 bg-white px-2.5 py-1">
+                    {selectedExternalLinks.length} of{" "}
+                    {suggestion.externalLinks.length} external link
+                    {suggestion.externalLinks.length === 1 ? "" : "s"} selected
+                  </span>
+                )}
+              </div>
+
+              {visibleCollections.length === 0 &&
+                visibleExternalLinks.length === 0 && (
+                  <div className="mt-3 rounded-lg border border-dashed border-blue-200 bg-white/70 px-3 py-3 text-sm text-gray-600">
+                    No items are preselected yet. Open the builder to search
+                    external links and inspect matching collections.
+                  </div>
+                )}
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {visibleCollections.map((item) => {
+                  const selected = selectedCollectionIds.has(item.id);
+
+                  return (
+                    <label
+                      key={`plan-collection-${item.id}`}
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors ${
+                        selected
+                          ? "border-blue-100 bg-white"
+                          : "border-gray-200 bg-white/70 opacity-60"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() =>
+                          toggleCollectionPlanOption(
+                            entry,
+                            "collection",
+                            item.id,
+                          )
+                        }
+                        className="mt-1 h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="min-w-0">
+                        <span className="block line-clamp-1 text-sm font-medium text-gray-800">
+                          {getItemTitle(item)}
+                        </span>
+                        <span className="mt-1 block line-clamp-2 text-xs text-gray-500">
+                          {getItemDescription(item, "Collection")}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+                {visibleExternalLinks.map((item) => {
+                  const selected = selectedExternalLinkIds.has(item.id);
+
+                  return (
+                    <label
+                      key={`plan-external-link-${item.id}`}
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors ${
+                        selected
+                          ? "border-blue-100 bg-white"
+                          : "border-gray-200 bg-white/70 opacity-60"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() =>
+                          toggleCollectionPlanOption(
+                            entry,
+                            "externalLink",
+                            item.id,
+                          )
+                        }
+                        className="mt-1 h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="min-w-0">
+                        <span className="block line-clamp-1 text-sm font-medium text-gray-800">
+                          {getItemTitle(item)}
+                        </span>
+                        <span className="mt-1 block line-clamp-2 text-xs text-gray-500">
+                          {getItemDescription(item, "External link")}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex flex-shrink-0 flex-col gap-2 sm:items-end">
+              <div className="text-xs font-medium text-blue-700">
+                {selectedTotal > 0
+                  ? `${selectedTotal} selected`
+                  : "Choose items"}
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  handleCollectionPlanSuggestionReview(
+                    buildSelectedCollectionPlanSuggestion(entry),
+                  )
+                }
+                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!onOpenCollectionPlan}
+              >
+                {selectedTotal > 0 ? "Build collection" : "Open builder"}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div
         className="flex flex-col h-full bg-white rounded-3xl shadow-2xl border border-gray-200/50 overflow-hidden"
@@ -1321,7 +2156,7 @@ const CustomChat = forwardRef(
                 Start a conversation
               </p>
               <p className="text-sm text-gray-500">
-                Ask about resources, events, or organizations
+                Ask about resources, events, or business units
               </p>
             </div>
           ) : (
@@ -1358,6 +2193,63 @@ const CustomChat = forwardRef(
                           .includes("please purchase more")
                       }
                     />
+
+                    {!entry.collectionPlanSuggestion &&
+                      entry.workflowTemplateSuggestion && (
+                      <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 text-sm font-medium text-blue-700">
+                              <FaMagic className="h-4 w-4 flex-shrink-0" />
+                              <span>Workflow template match</span>
+                            </div>
+                            <h3 className="mt-1 line-clamp-2 text-base font-semibold text-gray-900">
+                              {entry.workflowTemplateSuggestion.title}
+                            </h3>
+                            <p className="mt-2 text-sm leading-6 text-gray-700">
+                              {entry.workflowTemplateSuggestion.reason}
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-600">
+                              <span className="rounded-full border border-blue-100 bg-white px-2.5 py-1">
+                                {entry.workflowTemplateSuggestion.templates
+                                  ?.length || 1}{" "}
+                                candidate
+                                {(entry.workflowTemplateSuggestion.templates
+                                  ?.length || 1) === 1
+                                  ? ""
+                                  : "s"}
+                              </span>
+                              {entry.workflowTemplateSuggestion.externalLinksCount >
+                                0 && (
+                                <span className="rounded-full border border-blue-100 bg-white px-2.5 py-1">
+                                  {
+                                    entry.workflowTemplateSuggestion
+                                      .externalLinksCount
+                                  }{" "}
+                                  attached resource
+                                  {entry.workflowTemplateSuggestion
+                                    .externalLinksCount === 1
+                                    ? ""
+                                    : "s"}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleWorkflowSuggestionReview(
+                                entry.workflowTemplateSuggestion,
+                              )
+                            }
+                            className="inline-flex flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={!onOpenWorkflowPlanner}
+                          >
+                            Review template
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Add Referenced Items */}
                     {(entry.referencedItems ||
@@ -1433,6 +2325,8 @@ const CustomChat = forwardRef(
                             "Updated chat context to referenced items",
                           );
                         }}
+                        onAddToCollectionCart={addToCollectionCart}
+                        collectionCartItems={collectionCartItems}
                       />
                     )}
                   </div>
@@ -1548,9 +2442,86 @@ const CustomChat = forwardRef(
           )}
         </div>
 
+        {/* Collection Cart */}
+        {collectionCartItems.length > 0 && (
+          <div className="border-t border-blue-100 bg-blue-50/60 px-6 py-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm font-semibold text-blue-800">
+                  <FaShoppingCart className="h-4 w-4" />
+                  <span>Collection cart</span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-xs text-blue-700 ring-1 ring-blue-100">
+                    {collectionCartItems.length}
+                  </span>
+                </div>
+                <div className="mt-2 flex max-h-[92px] flex-wrap gap-2 overflow-y-auto pr-1">
+                  {collectionCartItems.map((item) => (
+                    <span
+                      key={getCollectionCartItemKey(item)}
+                      className="inline-flex max-w-[260px] items-center gap-2 rounded-full border border-blue-100 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm"
+                    >
+                      {item.type === "collection" ? (
+                        <FaFolder className="h-3.5 w-3.5 flex-shrink-0 text-blue-600" />
+                      ) : item.type === "resource" ? (
+                        <FaBook className="h-3.5 w-3.5 flex-shrink-0 text-blue-600" />
+                      ) : (
+                        <FaLink className="h-3.5 w-3.5 flex-shrink-0 text-blue-600" />
+                      )}
+                      <span className="truncate">
+                        {item.title || item.name || "Untitled"}
+                      </span>
+                      {item.isTemplate && (
+                        <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-indigo-700">
+                          Template
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeFromCollectionCart(item)}
+                        className="text-gray-400 hover:text-red-500"
+                        aria-label="Remove from collection cart"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 lg:flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowCollectionCartSearchModal(true)}
+                  className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                >
+                  Search to add
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCheckoutCollectionCart}
+                  disabled={!onOpenCollectionPlan}
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Checkout
+                </button>
+                <button
+                  type="button"
+                  onClick={clearCollectionCart}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Selected Resources Display */}
         {selectedResources.length > 0 && (
           <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/70">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Chat context
+            </div>
             <div className="flex flex-wrap gap-2 max-h-[130px] overflow-y-auto">
               {getConsolidatedChips().map((item) => (
                 <div
@@ -1654,6 +2625,26 @@ const CustomChat = forwardRef(
           selectedResources={selectedResources}
         />
 
+        <SearchModal
+          isOpen={showCollectionCartSearchModal}
+          onClose={() => setShowCollectionCartSearchModal(false)}
+          onSelect={(item) => {
+            addToCollectionCart(item);
+            setShowCollectionCartSearchModal(false);
+          }}
+          selectedResources={collectionCartItems}
+          collections={allCollections}
+          resources={allResources}
+          events={allEvents}
+          externalLinks={chatData?.externalLinks || []}
+          notations={chatData?.notations || []}
+          linkGroups={chatData?.linkGroups || []}
+          attachments={chatData?.attachments || []}
+          allowedTabs={["links", "collections", "resources"]}
+          title="Add to collection cart"
+          placeholder="Search external links, collections, and resources..."
+        />
+
         {/* Input Area */}
         <div className="border-t border-gray-200/50 bg-gradient-to-b from-gray-50 to-white p-6">
           <div className="flex flex-col gap-4">
@@ -1672,10 +2663,11 @@ const CustomChat = forwardRef(
               </div>
             )} */}
 
-            <div className="flex flex-col gap-3">
-              {/* Controls Row */}
-              <div className="flex gap-2">
-                <div className="relative">
+              <div className="flex flex-col gap-3">
+                {/* Controls Row */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
                   <button
                     onClick={handleUserIconClick}
                     onMouseEnter={() => setIsHovering(true)}
@@ -1755,7 +2747,7 @@ const CustomChat = forwardRef(
                         )}
                       </div>
                     )}
-                </div>
+                  </div>
 
                 {/* Search Type Toggles */}
                 {allEvents.length > 0 && (
@@ -1814,7 +2806,7 @@ const CustomChat = forwardRef(
                   >
                     <FaGlobeAmericas className="h-4 w-4" />
                     <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                      Organizations
+                      Business Units
                     </span>
                   </button>
                 )}
@@ -1858,8 +2850,26 @@ const CustomChat = forwardRef(
                 <button
                   onClick={() => setShowSearchModal(true)}
                   className="p-2 rounded-lg transition-all duration-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                  title="Add to chat context"
                 >
                   <FaPlus className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCollectionCartSearchModal(true)}
+                  className={`relative p-2 rounded-lg transition-all duration-200 ${
+                    collectionCartItems.length > 0
+                      ? "bg-blue-100 text-blue-700"
+                      : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                  }`}
+                  title="Add to collection cart"
+                >
+                  <FaShoppingCart className="h-4 w-4" />
+                  {collectionCartItems.length > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold text-white">
+                      {collectionCartItems.length}
+                    </span>
+                  )}
                 </button>
                 {/* 
                 <button
@@ -1906,8 +2916,197 @@ const CustomChat = forwardRef(
                       Export
                     </span>
                   </button>
-                )}
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowWhiteboardPanel((current) => !current)}
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-200 ${
+                    showWhiteboardPanel
+                      ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm"
+                      : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:bg-blue-50/60 hover:text-blue-700"
+                  }`}
+                >
+                  <FaChalkboard className="h-4 w-4" />
+                  <span>Whiteboard</span>
+                  {whiteboardHasContent && (
+                    <span className="h-2 w-2 rounded-full bg-blue-500" />
+                  )}
+                </button>
               </div>
+
+              {showWhiteboardPanel && (
+                <div className="rounded-2xl border border-blue-100 bg-white/95 p-4 shadow-sm">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-blue-700">
+                        <FaChalkboard className="h-4 w-4" />
+                        <span>Prompt whiteboard</span>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {whiteboardHasContent
+                          ? "Use this board as visual context for the next request."
+                          : "Sketch the flow, structure, or notes you want the assistant to use."}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={includeWhiteboardInChat}
+                          onChange={(event) =>
+                            setIncludeWhiteboardInChat(event.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        Include in chat
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleSaveWhiteboardAttachments}
+                        disabled={
+                          isSavingWhiteboardAttachments ||
+                          !whiteboardHasContent ||
+                          (!attachWhiteboardToCollection &&
+                            !attachWhiteboardToExternalLink)
+                        }
+                        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isSavingWhiteboardAttachments ? (
+                          <FaSpinner className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <FaSave className="h-4 w-4" />
+                        )}
+                        Save attachments
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <label className="flex items-start gap-2 text-sm font-medium text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={attachWhiteboardToCollection}
+                          disabled={whiteboardCollectionOptions.length === 0}
+                          onChange={(event) => {
+                            setAttachWhiteboardToCollection(
+                              event.target.checked,
+                            );
+                            if (
+                              event.target.checked &&
+                              !whiteboardCollectionId &&
+                              whiteboardCollectionOptions[0]
+                            ) {
+                              setWhiteboardCollectionId(
+                                whiteboardCollectionOptions[0].id,
+                              );
+                            }
+                          }}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                        />
+                        <span>
+                          Attach to collection
+                          <span className="block text-xs font-normal text-gray-500">
+                            Saves this board onto a selected collection.
+                          </span>
+                        </span>
+                      </label>
+                      <select
+                        value={whiteboardCollectionId}
+                        disabled={
+                          !attachWhiteboardToCollection ||
+                          whiteboardCollectionOptions.length === 0
+                        }
+                        onChange={(event) =>
+                          setWhiteboardCollectionId(event.target.value)
+                        }
+                        className="mt-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-400"
+                      >
+                        {whiteboardCollectionOptions.length === 0 ? (
+                          <option value="">No collections available</option>
+                        ) : (
+                          whiteboardCollectionOptions.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.label}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <label className="flex items-start gap-2 text-sm font-medium text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={attachWhiteboardToExternalLink}
+                          disabled={whiteboardExternalLinkOptions.length === 0}
+                          onChange={(event) => {
+                            setAttachWhiteboardToExternalLink(
+                              event.target.checked,
+                            );
+                            if (
+                              event.target.checked &&
+                              !whiteboardExternalLinkId &&
+                              whiteboardExternalLinkOptions[0]
+                            ) {
+                              setWhiteboardExternalLinkId(
+                                whiteboardExternalLinkOptions[0].id,
+                              );
+                            }
+                          }}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                        />
+                        <span>
+                          Attach to external link
+                          <span className="block text-xs font-normal text-gray-500">
+                            Select or mention a link, then save this board to it.
+                          </span>
+                        </span>
+                      </label>
+                      <select
+                        value={whiteboardExternalLinkId}
+                        disabled={
+                          !attachWhiteboardToExternalLink ||
+                          whiteboardExternalLinkOptions.length === 0
+                        }
+                        onChange={(event) =>
+                          setWhiteboardExternalLinkId(event.target.value)
+                        }
+                        className="mt-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-400"
+                      >
+                        {whiteboardExternalLinkOptions.length === 0 ? (
+                          <option value="">No external links selected</option>
+                        ) : (
+                          whiteboardExternalLinkOptions.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.label}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                  </div>
+
+                  {whiteboardSummary && (
+                    <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+                      {whiteboardSummary}
+                    </div>
+                  )}
+
+                  <div className="mt-4">
+                    <ExternalLinkWhiteboard
+                      boardId="chat-prompt-whiteboard"
+                      title="Prompt"
+                      whiteboardData={chatWhiteboardData}
+                      canEdit={true}
+                      onSave={handleChatWhiteboardSave}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Input and Send Button Container */}
               <div className="flex flex-col sm:flex-row gap-3 relative">
@@ -2090,63 +3289,199 @@ const CustomChat = forwardRef(
           </div>
         </div>
 
+        {pendingWorkflowSuggestion && (
+          <Modal
+            isOpen={!!pendingWorkflowSuggestion}
+            onClose={() => setPendingWorkflowSuggestion(null)}
+            maxWidth="max-w-lg"
+          >
+            <div className="p-6">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <FaChalkboard className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Use this whiteboard with the project?
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                    The chat has a prompt whiteboard. You can carry it into the
+                    template planner and optionally attach it to the collection
+                    that gets created.
+                  </p>
+                </div>
+              </div>
+
+              {whiteboardSummary && (
+                <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+                  {whiteboardSummary}
+                </div>
+              )}
+
+              <label className="mt-4 flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={attachWhiteboardToWorkflowProject}
+                  onChange={(event) =>
+                    setAttachWhiteboardToWorkflowProject(event.target.checked)
+                  }
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span>
+                  Attach to the created collection
+                  <span className="block text-xs text-gray-500">
+                    When the project is created, this whiteboard becomes the
+                    collection whiteboard.
+                  </span>
+                </span>
+              </label>
+
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => continueWorkflowSuggestion(false)}
+                  className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  Continue without whiteboard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => continueWorkflowSuggestion(true)}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Use whiteboard
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {pendingCollectionPlanSuggestion && (
+          <Modal
+            isOpen={!!pendingCollectionPlanSuggestion}
+            onClose={() => setPendingCollectionPlanSuggestion(null)}
+            maxWidth="max-w-lg"
+          >
+            <div className="p-6">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <FaChalkboard className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Use this whiteboard with the plan?
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                    The chat has a prompt whiteboard. You can carry it into the
+                    suggested collection plan and optionally attach it to the
+                    collection that gets created.
+                  </p>
+                </div>
+              </div>
+
+              {whiteboardSummary && (
+                <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+                  {whiteboardSummary}
+                </div>
+              )}
+
+              <label className="mt-4 flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={attachWhiteboardToWorkflowProject}
+                  onChange={(event) =>
+                    setAttachWhiteboardToWorkflowProject(event.target.checked)
+                  }
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span>
+                  Attach to the created collection
+                  <span className="block text-xs text-gray-500">
+                    When a collection is created, this whiteboard becomes the
+                    collection whiteboard.
+                  </span>
+                </span>
+              </label>
+
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => continueCollectionPlanSuggestion(false)}
+                  className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  Continue without whiteboard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => continueCollectionPlanSuggestion(true)}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Use whiteboard
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
         <InsufficientCreditsModal
           isOpen={showInsufficientCreditsModal}
           onClose={() => setShowInsufficientCreditsModal(false)}
         />
 
-        <ChatExportModal
-          isOpen={showExportModal}
-          onClose={() => setShowExportModal(false)}
-          selectedResources={selectedResources}
-          chatHistory={history}
-          referencedItems={[
-            // Include collections
-            ...(chatData?.collections?.map((collection) => ({
-              ...collection,
-              type: "collection",
-            })) || []),
-            // Include direct external links
-            ...(chatData?.externalLinks?.map((link) => ({
-              ...link,
-              type: "external_link",
-            })) || []),
-            // Include resources
-            ...(chatData?.resources?.map((resource) => ({
-              ...resource,
-              type: "resource",
-            })) || []),
-            // Include events
-            ...(chatData?.events?.map((event) => ({
-              ...event,
-              type: "event",
-            })) || []),
-            // Include videos
-            ...(chatData?.videos?.map((video) => ({
-              ...video,
-              type: "video",
-            })) || []),
-            // Include direct attachments
-            ...(chatData?.attachments?.map((attachment) => ({
-              ...attachment,
-              type: "attachment",
-            })) || []),
-            ...(chatData?.linkGroups?.map((linkGroup) => ({
-              ...linkGroup,
-              type: "link_group",
-            })) || []),
-            // Include direct notations
-            ...(chatData?.notations?.map((notation) => ({
-              ...notation,
-              type: "notation",
-            })) || []),
-            // Include organizations
-            ...(chatData?.organizations?.map((organization) => ({
-              ...organization,
-              type: "organization",
-            })) || []),
-          ]}
-        />
+        {showExportModal && (
+          <ChatExportModal
+            isOpen={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            selectedResources={selectedResources}
+            chatHistory={history}
+            referencedItems={[
+              // Include collections
+              ...(chatData?.collections?.map((collection) => ({
+                ...collection,
+                type: "collection",
+              })) || []),
+              // Include direct external links
+              ...(chatData?.externalLinks?.map((link) => ({
+                ...link,
+                type: "external_link",
+              })) || []),
+              // Include resources
+              ...(chatData?.resources?.map((resource) => ({
+                ...resource,
+                type: "resource",
+              })) || []),
+              // Include events
+              ...(chatData?.events?.map((event) => ({
+                ...event,
+                type: "event",
+              })) || []),
+              // Include videos
+              ...(chatData?.videos?.map((video) => ({
+                ...video,
+                type: "video",
+              })) || []),
+              // Include direct attachments
+              ...(chatData?.attachments?.map((attachment) => ({
+                ...attachment,
+                type: "attachment",
+              })) || []),
+              ...(chatData?.linkGroups?.map((linkGroup) => ({
+                ...linkGroup,
+                type: "link_group",
+              })) || []),
+              // Include direct notations
+              ...(chatData?.notations?.map((notation) => ({
+                ...notation,
+                type: "notation",
+              })) || []),
+              // Include organizations
+              ...(chatData?.organizations?.map((organization) => ({
+                ...organization,
+                type: "organization",
+              })) || []),
+            ]}
+          />
+        )}
 
         <style jsx global>{`
           /* Remove conflicting ProseMirror animations */

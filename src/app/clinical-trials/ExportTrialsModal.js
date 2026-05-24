@@ -19,6 +19,7 @@ const ExportTrialsModal = ({ isOpen, onClose, selectedTrials = [] }) => {
   const [showLLMDropdown, setShowLLMDropdown] = useState(false);
   const llmDropdownRef = useRef(null);
   const buttonRef = useRef(null);
+  const generatePromptContentRef = useRef(null);
   const [exportOptions, setExportOptions] = useState({
     includeBasicInfo: true,
     includeStatus: true,
@@ -33,7 +34,7 @@ const ExportTrialsModal = ({ isOpen, onClose, selectedTrials = [] }) => {
 
   useEffect(() => {
     if (isOpen && selectedTrials.length > 0) {
-      generatePromptContent();
+      generatePromptContentRef.current?.();
     }
   }, [isOpen, selectedTrials, exportOptions]);
 
@@ -211,6 +212,7 @@ const ExportTrialsModal = ({ isOpen, onClose, selectedTrials = [] }) => {
 
     setPromptContent(prompt);
   };
+  generatePromptContentRef.current = generatePromptContent;
 
   const handleCopy = () => {
     navigator.clipboard

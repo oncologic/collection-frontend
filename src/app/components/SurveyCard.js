@@ -48,7 +48,7 @@ export const SurveyCard = ({ survey, onDismiss }) => {
                       width={64}
                       height={64}
                       alt={
-                        survey?.organizations[0]?.name || "Organization Logo"
+                        survey?.organizations[0]?.name || "Business Unit Logo"
                       }
                       src={survey?.organizations[0]?.imageUrl}
                       className="h-16 w-16 rounded-lg object-cover p-1"

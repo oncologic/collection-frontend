@@ -32,7 +32,7 @@ const ImportPreviewModal = ({ data, onClose, onEdit, onConfirm }) => {
             <div className="flex items-center">
               <FaBuilding className="text-blue-600 mr-2" />
               <span className="font-medium">
-                {data.organizations?.length || 0} Organizations
+                {data.organizations?.length || 0} Business Units
               </span>
             </div>
             <div className="flex items-center">
@@ -60,7 +60,7 @@ const ImportPreviewModal = ({ data, onClose, onEdit, onConfirm }) => {
             }`}
             onClick={() => setActiveTab("organizations")}
           >
-            Organizations ({data.organizations?.length || 0})
+            Business Units ({data.organizations?.length || 0})
           </button>
           <button
             className={`px-4 py-2 font-medium ${
@@ -86,7 +86,7 @@ const ImportPreviewModal = ({ data, onClose, onEdit, onConfirm }) => {
 
         {/* Content */}
         <div className="p-4 overflow-y-auto" style={{ maxHeight: "50vh" }}>
-          {/* Organizations Tab */}
+          {/* Business Units Tab */}
           {activeTab === "organizations" && (
             <div className="space-y-3">
               {data.organizations?.map((org, index) => (
@@ -151,7 +151,7 @@ const ImportPreviewModal = ({ data, onClose, onEdit, onConfirm }) => {
                         </a>
                       )}
                       <div className="text-xs text-gray-500 mt-2">
-                        Organization: {resource.organizationName}
+                        Business Unit: {resource.organizationName}
                       </div>
                       {resource.tags?.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">
@@ -201,7 +201,7 @@ const ImportPreviewModal = ({ data, onClose, onEdit, onConfirm }) => {
               className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
             >
               <FaEdit className="inline-block mr-2" />
-              Edit Organizations
+              Edit Business Units
             </button>
             <button
               onClick={() => onEdit("resources")}

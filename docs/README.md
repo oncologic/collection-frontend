@@ -22,7 +22,7 @@ docs/
 - [Collection Pagination](./features/collections/README_PAGINATION.md) - Paginated collection and external-link loading.
 - [Global Search](./features/global-search/GLOBAL_SEARCH_FEATURE.md) - Frontend global search behavior and integration points.
 - [Invitation Flow](./features/invitations/README_INVITATION_FLOW.md) - Invitation acceptance, auth redirect, and post-login handling.
-- [Payments](./features/payments/README.md) - Plan changes, Stripe flows, downgrade validation, and cleanup handling.
+- [Subscriptions](./features/subscriptions/README.md) - Internal plan changes, downgrade validation, and cleanup handling.
 - [Personal Tenant](./features/personal-tenant/README.md) - Personal workspace behavior alongside shared/public tenants.
 
 ## Guides

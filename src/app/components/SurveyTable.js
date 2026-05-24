@@ -56,13 +56,13 @@ export default function SurveyTable({
     getSortedRowModel: getSortedRowModel(),
     globalFilterFn: "includesString",
   });
+  const filteredRows = table.getFilteredRowModel().rows;
 
   // Add effect to watch filtered rows and update parent
   useEffect(() => {
-    const filteredRows = table.getFilteredRowModel().rows;
     const filteredData = filteredRows.map((row) => row.original);
     onFilteredDataChange(filteredData);
-  }, [table.getFilteredRowModel().rows, onFilteredDataChange]);
+  }, [filteredRows, onFilteredDataChange]);
 
   return (
     <div className="w-full bg-white shadow-md rounded-lg p-6">

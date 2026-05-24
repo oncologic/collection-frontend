@@ -7,8 +7,6 @@ import {
   FaArrowRight,
   FaCalendarAlt,
   FaCheckCircle,
-  FaChevronDown,
-  FaChevronUp,
   FaClock,
   FaExclamationCircle,
   FaHourglassHalf,
@@ -144,13 +142,16 @@ const STEP_MATCH_STOP_WORDS = new Set([
 ]);
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const TIMELINE_CONTEXT_DAYS = 30;
+const TIMELINE_DAY_WIDTH = 14;
+const TIMELINE_MIN_WIDTH = 720;
 
 const parseDate = (value) => {
   if (!value) return null;
   if (value instanceof Date) return value;
 
   const date = new Date(
-    String(value).includes("T") ? value : `${value}T00:00:00`
+    String(value).includes("T") ? value : `${value}T00:00:00`,
   );
   return Number.isNaN(date.getTime()) ? null : date;
 };
@@ -170,11 +171,46 @@ const formatDate = (value) => {
   });
 };
 
+const formatDateWithYear = (value) => {
+  const date = parseDate(value);
+  if (!date) return "";
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
 const daysBetweenInclusive = (start, end) => {
   const startDate = parseDate(start);
   const endDate = parseDate(end || start);
   if (!startDate || !endDate) return 1;
   return Math.max(1, Math.round((endDate - startDate) / MS_PER_DAY) + 1);
+};
+
+const formatDuration = (days) => {
+  const safeDays = Math.max(0, Math.round(Number(days) || 0));
+  if (safeDays === 0) return "0 days";
+
+  const years = Math.floor(safeDays / 365);
+  let remainingDays = safeDays % 365;
+  const months = years === 0 ? Math.floor(remainingDays / 30) : 0;
+  if (months > 0) {
+    remainingDays %= 30;
+  }
+
+  const parts = [];
+  if (years > 0) {
+    parts.push(`${years} ${years === 1 ? "year" : "years"}`);
+  }
+  if (months > 0) {
+    parts.push(`${months} ${months === 1 ? "month" : "months"}`);
+  }
+  if (remainingDays > 0 || parts.length === 0) {
+    parts.push(`${remainingDays} ${remainingDays === 1 ? "day" : "days"}`);
+  }
+
+  return parts.join(" ");
 };
 
 const dayOffset = (start, value) => {
@@ -241,15 +277,15 @@ const summarizeSteps = (steps) => {
       acc[status] = (acc[status] || 0) + 1;
       return acc;
     },
-    { total: 0 }
+    { total: 0 },
   );
 
   const nextStep =
     steps.find(
       (step) =>
         !["completed", "archived"].includes(
-          String(step.status || "pending").toLowerCase()
-        )
+          String(step.status || "pending").toLowerCase(),
+        ),
     ) || null;
 
   return {
@@ -262,6 +298,257 @@ const summarizeSteps = (steps) => {
   };
 };
 
+const buildTimelineMetrics = (steps, startDate, endDate) => {
+  const todayDate = toDateString(new Date());
+  const scheduleSteps = steps
+    .map((step) => {
+      const stepStartDate = toDateString(step.startDate || step.date);
+      const stepEndDate = toDateString(step.endDate || stepStartDate);
+
+      return {
+        ...step,
+        startDate: stepStartDate,
+        endDate: stepEndDate,
+        durationDays: daysBetweenInclusive(stepStartDate, stepEndDate),
+        isDone: ["completed", "archived"].includes(
+          String(step.status || "pending").toLowerCase(),
+        ),
+      };
+    })
+    .filter((step) => step.startDate);
+
+  const totalWorkDays = scheduleSteps.reduce(
+    (total, step) => total + step.durationDays,
+    0,
+  );
+  const completedWorkDays = scheduleSteps
+    .filter((step) => step.isDone)
+    .reduce((total, step) => total + step.durationDays, 0);
+  const remainingSteps = scheduleSteps.filter((step) => !step.isDone);
+  const remainingWorkDays = remainingSteps.reduce(
+    (total, step) => total + step.durationDays,
+    0,
+  );
+  const remainingDateValues = remainingSteps.flatMap((step) => [
+    step.startDate,
+    step.endDate || step.startDate,
+  ]);
+  const remainingStartDate = remainingDateValues
+    .filter(Boolean)
+    .sort((a, b) => parseDate(a) - parseDate(b))[0];
+  const remainingEndDate = remainingDateValues
+    .filter(Boolean)
+    .sort((a, b) => parseDate(a) - parseDate(b))
+    .at(-1);
+  const completedPercent = totalWorkDays
+    ? Math.round((completedWorkDays / totalWorkDays) * 100)
+    : 0;
+  const isCompletionOverdue =
+    Boolean(remainingEndDate) && parseDate(remainingEndDate) < parseDate(todayDate);
+  const completionClockStartDate = remainingSteps.length
+    ? isCompletionOverdue
+      ? remainingEndDate
+      : todayDate
+    : null;
+  const calendarUntilCompletionDays =
+    remainingSteps.length && completionClockStartDate
+      ? daysBetweenInclusive(completionClockStartDate, remainingEndDate)
+      : 0;
+  const overdueDays = isCompletionOverdue
+    ? dayDelta(remainingEndDate, todayDate)
+    : 0;
+  const completionWindowPercent = daysBetweenInclusive(startDate, endDate)
+    ? Math.round(
+        (calendarUntilCompletionDays / daysBetweenInclusive(startDate, endDate)) *
+          100,
+      )
+    : 0;
+
+  return {
+    todayDate,
+    startDate,
+    endDate,
+    totalCalendarDays: daysBetweenInclusive(startDate, endDate),
+    totalWorkDays,
+    completedWorkDays,
+    remainingWorkDays,
+    completedPercent,
+    remainingPercent: Math.max(0, 100 - completedPercent),
+    remainingStepsCount: remainingSteps.length,
+    remainingStartDate,
+    remainingEndDate,
+    remainingCalendarDays: remainingSteps.length
+      ? daysBetweenInclusive(remainingStartDate, remainingEndDate)
+      : 0,
+    completionClockStartDate,
+    calendarUntilCompletionDays,
+    completionWindowPercent,
+    isCompletionOverdue,
+    overdueDays,
+  };
+};
+
+const TimelineOverviewPopover = ({ metrics }) => {
+  const completePercent = clamp(metrics.completedPercent, 0, 100);
+  const remainingPercent = clamp(metrics.remainingPercent, 0, 100);
+  const completionWindowPercent = clamp(metrics.completionWindowPercent, 0, 100);
+  const remainingTimelineText = metrics.remainingStepsCount
+    ? `${formatDate(metrics.remainingStartDate)} to ${formatDate(
+        metrics.remainingEndDate,
+      )}`
+    : "Complete";
+  const completionTimingText = metrics.remainingStepsCount
+    ? metrics.isCompletionOverdue
+      ? `${formatDuration(metrics.overdueDays)} overdue`
+      : formatDuration(metrics.calendarUntilCompletionDays)
+    : "Complete";
+  const finishByText = metrics.remainingStepsCount
+    ? formatDateWithYear(metrics.remainingEndDate)
+    : "Complete";
+
+  return (
+    <div className="absolute left-0 top-full z-30 mt-2 w-[calc(100vw-3rem)] rounded-lg border border-slate-200 bg-white p-4 text-left shadow-xl shadow-slate-900/10 sm:left-auto sm:right-0 sm:w-[560px]">
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="flex shrink-0 justify-center sm:w-40">
+          <div
+            className="relative h-36 w-36 rounded-full border border-slate-100"
+            style={{
+              background: `conic-gradient(#2563eb ${completePercent}%, #e2e8f0 ${completePercent}% 100%)`,
+            }}
+          >
+            <div className="absolute inset-4 flex flex-col items-center justify-center rounded-full bg-white shadow-inner">
+              <span className="text-3xl font-semibold text-slate-900">
+                {completePercent}%
+              </span>
+              <span className="text-xs font-medium uppercase text-slate-400">
+                Complete
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <FaClock className="h-4 w-4 text-blue-600" />
+            <span>Timeline overview</span>
+          </div>
+          <div className="mt-1 text-sm text-slate-600">
+            Full schedule:{" "}
+            {formatDateWithYear(metrics.startDate)} to{" "}
+            {formatDateWithYear(metrics.endDate)}
+            <span className="mx-2 text-slate-300">•</span>
+            {formatDuration(metrics.totalCalendarDays)}
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-slate-700">
+                  Scheduled work complete
+                </span>
+                <span className="font-semibold text-blue-700">
+                  {completePercent}%
+                </span>
+              </div>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-blue-600"
+                  style={{ width: `${completePercent}%` }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-slate-700">
+                  Remaining work
+                </span>
+                <span className="font-semibold text-slate-900">
+                  {formatDuration(metrics.remainingWorkDays)}
+                </span>
+              </div>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-slate-400"
+                  style={{ width: `${remainingPercent}%` }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-medium text-slate-700">
+                  Calendar until done
+                </span>
+                <span
+                  className={`font-semibold ${
+                    metrics.isCompletionOverdue
+                      ? "text-rose-700"
+                      : "text-slate-900"
+                  }`}
+                >
+                  {completionTimingText}
+                </span>
+              </div>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className={`h-full rounded-full ${
+                    metrics.isCompletionOverdue ? "bg-rose-500" : "bg-blue-400"
+                  }`}
+                  style={{ width: `${completionWindowPercent}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 text-sm sm:grid-cols-4">
+        <div className="rounded-md border border-blue-100 bg-blue-50/70 px-3 py-2">
+          <div className="text-xs font-medium uppercase text-slate-500">
+            Work left
+          </div>
+          <div className="mt-0.5 font-semibold text-blue-700">
+            {formatDuration(metrics.remainingWorkDays)}
+          </div>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="text-xs font-medium uppercase text-slate-500">
+            Until done
+          </div>
+          <div className="mt-0.5 font-semibold text-slate-800">
+            {completionTimingText}
+          </div>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="text-xs font-medium uppercase text-slate-500">
+            Open steps
+          </div>
+          <div className="mt-0.5 font-semibold text-slate-800">
+            {metrics.remainingStepsCount}
+          </div>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="text-xs font-medium uppercase text-slate-500">
+            Finish by
+          </div>
+          <div className="mt-0.5 font-semibold text-slate-800">
+            {finishByText}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 text-xs text-slate-500">
+        {formatDuration(metrics.completedWorkDays)} of{" "}
+        {formatDuration(metrics.totalWorkDays)} scheduled work completed.
+        {metrics.remainingStepsCount
+          ? ` Remaining window: ${remainingTimelineText}.`
+          : ""}
+      </div>
+    </div>
+  );
+};
+
 const getInstructionNumber = (matchValue) => {
   if (!matchValue) return 1;
   const normalized = String(matchValue).toLowerCase();
@@ -271,12 +558,12 @@ const getInstructionNumber = (matchValue) => {
 const getShiftDays = (instruction) => {
   const lower = instruction.toLowerCase();
   const weekMatch = lower.match(
-    /\b(?:by|out by|push(?:ed)?(?: out)? by)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+week/
+    /\b(?:by|out by|push(?:ed)?(?: out)? by)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+week/,
   );
   if (weekMatch) return getInstructionNumber(weekMatch[1]) * 7;
 
   const dayMatch = lower.match(
-    /\b(?:by|out by|push(?:ed)?(?: out)? by)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+day/
+    /\b(?:by|out by|push(?:ed)?(?: out)? by)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+day/,
   );
   if (dayMatch) return getInstructionNumber(dayMatch[1]);
 
@@ -305,19 +592,20 @@ const dateFromParts = (year, month, day) => {
 
 const parseInstructionDate = (instruction, referenceDate) => {
   const lower = instruction.toLowerCase();
-  const fallbackYear = parseDate(referenceDate)?.getFullYear() || new Date().getFullYear();
+  const fallbackYear =
+    parseDate(referenceDate)?.getFullYear() || new Date().getFullYear();
 
   const isoMatch = lower.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
   if (isoMatch) {
     return dateFromParts(
       Number(isoMatch[1]),
       Number(isoMatch[2]) - 1,
-      Number(isoMatch[3])
+      Number(isoMatch[3]),
     );
   }
 
   const monthMatch = lower.match(
-    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{2,4}))?\b/
+    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{2,4}))?\b/,
   );
   if (monthMatch) {
     const month = MONTHS[monthMatch[1].replace(".", "")];
@@ -329,7 +617,11 @@ const parseInstructionDate = (instruction, referenceDate) => {
   const slashMatch = lower.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
   if (slashMatch) {
     const year = normalizeYear(slashMatch[3], fallbackYear);
-    return dateFromParts(year, Number(slashMatch[1]) - 1, Number(slashMatch[2]));
+    return dateFromParts(
+      year,
+      Number(slashMatch[1]) - 1,
+      Number(slashMatch[2]),
+    );
   }
 
   return null;
@@ -347,7 +639,7 @@ const tokenizeForStepMatch = (value) =>
         WEEKDAYS[word] === undefined &&
         MONTHS[word] === undefined &&
         NUMBER_WORDS[word] === undefined &&
-        !/^\d+$/.test(word)
+        !/^\d+$/.test(word),
     );
 
 const findTargetStep = (instruction, steps) => {
@@ -368,7 +660,7 @@ const findTargetStep = (instruction, steps) => {
     .map((step) => {
       const titleTokens = tokenizeForStepMatch(step.name || step.title || "");
       const matchedTokenCount = titleTokens.filter((word) =>
-        instructionTokens.has(word)
+        instructionTokens.has(word),
       ).length;
       return {
         step,
@@ -399,7 +691,7 @@ const buildAssistantProposal = (instruction, steps) => {
   const weekday = Object.keys(WEEKDAYS).find((day) => lower.includes(day));
   const explicitDate = parseInstructionDate(
     lower,
-    targetStep?.startDate || steps[0]?.startDate
+    targetStep?.startDate || steps[0]?.startDate,
   );
   const targetStartDate =
     explicitDate ||
@@ -423,7 +715,10 @@ const buildAssistantProposal = (instruction, steps) => {
   const updates = new Map();
 
   if (targetStep && targetStartDate) {
-    const duration = daysBetweenInclusive(targetStep.startDate, targetStep.endDate);
+    const duration = daysBetweenInclusive(
+      targetStep.startDate,
+      targetStep.endDate,
+    );
     updates.set(targetStep.id, {
       step: targetStep,
       startDate: targetStartDate,
@@ -457,10 +752,9 @@ const buildAssistantProposal = (instruction, steps) => {
       !targetStartDate &&
       !lower.includes("after") &&
       !lower.includes("then");
-    const shouldShiftFromOrder =
-      wholeTimelineOnly
-        ? -1
-        : targetStep && (moveEverything || lower.includes("after"))
+    const shouldShiftFromOrder = wholeTimelineOnly
+      ? -1
+      : targetStep && (moveEverything || lower.includes("after"))
         ? targetStep.sortOrder
         : -1;
 
@@ -488,7 +782,7 @@ const buildAssistantProposal = (instruction, steps) => {
       update.startDate &&
       update.endDate &&
       (toDateString(update.step.startDate) !== update.startDate ||
-        toDateString(update.step.endDate) !== update.endDate)
+        toDateString(update.step.endDate) !== update.endDate),
   );
 };
 
@@ -499,8 +793,12 @@ export default function WorkflowGanttChart({
 }) {
   const router = useRouter();
   const recentDragRef = useRef(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const timelineOverviewRef = useRef(null);
+  const ganttPreviewRef = useRef(null);
+  const lastTimelineScrollKeyRef = useRef("");
+  const lastAssistantPreviewInputRef = useRef("");
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [isTimelineOverviewOpen, setIsTimelineOverviewOpen] = useState(false);
   const [assistantInput, setAssistantInput] = useState("");
   const [assistantProposal, setAssistantProposal] = useState([]);
   const [draftByStepId, setDraftByStepId] = useState({});
@@ -508,14 +806,6 @@ export default function WorkflowGanttChart({
   const [isSaving, setIsSaving] = useState(false);
 
   const workflowKind = collection?.workflowMetadata?.kind;
-
-  useEffect(() => {
-    if (!collection?.id) return;
-    const storedValue = window.localStorage.getItem(
-      `workflow-gantt:${collection.id}:collapsed`
-    );
-    setIsCollapsed(storedValue === "true");
-  }, [collection?.id]);
 
   const workflowSteps = useMemo(() => {
     return (collection?.externalLinks || [])
@@ -531,7 +821,7 @@ export default function WorkflowGanttChart({
         const fallbackStart = collection?.startDate || new Date().toISOString();
         const relativeStartDay = Number(metadata.relativeStartDay || 0);
         const estimatedDurationDays = Number(
-          metadata.estimatedDurationDays || 1
+          metadata.estimatedDurationDays || 1,
         );
         const fallbackDate = parseDate(fallbackStart);
         const calculatedStartDate = fallbackDate
@@ -561,43 +851,68 @@ export default function WorkflowGanttChart({
 
   const shouldRender =
     workflowKind ||
-    workflowSteps.some((step) => step.workflowMetadata?.kind === "workflow_step");
+    workflowSteps.some(
+      (step) => step.workflowMetadata?.kind === "workflow_step",
+    );
 
   const assistantProposalByStepId = useMemo(() => {
-    return new Map(
-      assistantProposal.map((update) => [update.step.id, update])
-    );
+    return new Map(assistantProposal.map((update) => [update.step.id, update]));
   }, [assistantProposal]);
 
+  const scheduleDateValues = workflowSteps.flatMap((step) => [
+    step.startDate,
+    step.endDate || step.startDate,
+  ]);
+  const scheduleStartDate = scheduleDateValues
+    .filter(Boolean)
+    .sort((a, b) => parseDate(a) - parseDate(b))[0];
+  const scheduleEndDate = scheduleDateValues
+    .filter(Boolean)
+    .sort((a, b) => parseDate(a) - parseDate(b))
+    .at(-1);
   const timelineDateValues = [
-    ...workflowSteps.flatMap((step) => [
-      step.startDate,
-      step.endDate || step.startDate,
-    ]),
+    ...scheduleDateValues,
     ...assistantProposal.flatMap((update) => [
       update.startDate,
       update.endDate || update.startDate,
     ]),
   ];
 
-  const startDate = timelineDateValues
+  const chartContentStartDate = timelineDateValues
     .filter(Boolean)
     .sort((a, b) => parseDate(a) - parseDate(b))[0];
-  const endDate = timelineDateValues
+  const chartContentEndDate = timelineDateValues
     .filter(Boolean)
     .sort((a, b) => parseDate(a) - parseDate(b))
     .at(-1);
-  const totalDays = daysBetweenInclusive(startDate, endDate);
-  const chartWidth = Math.max(720, totalDays * 14);
-  const ticks = buildTimelineTicks(startDate, totalDays);
+  const chartStartDate =
+    addDays(chartContentStartDate, -TIMELINE_CONTEXT_DAYS) ||
+    chartContentStartDate;
+  const chartEndDate =
+    addDays(chartContentEndDate, TIMELINE_CONTEXT_DAYS) ||
+    chartContentEndDate;
+  const totalDays = daysBetweenInclusive(chartStartDate, chartEndDate);
+  const chartWidth = Math.max(
+    TIMELINE_MIN_WIDTH,
+    totalDays * TIMELINE_DAY_WIDTH,
+  );
+  const ticks = buildTimelineTicks(chartStartDate, totalDays);
   const summary = summarizeSteps(workflowSteps);
+  const timelineMetrics = useMemo(
+    () =>
+      buildTimelineMetrics(workflowSteps, scheduleStartDate, scheduleEndDate),
+    [scheduleEndDate, scheduleStartDate, workflowSteps],
+  );
 
   const openStep = useCallback(
     (step) => {
       if (recentDragRef.current) return;
-      router.push(`/external-links/${step.id}`);
+      const collectionQuery = collection?.id
+        ? `?collectionId=${encodeURIComponent(collection.id)}`
+        : "";
+      router.push(`/external-links/${step.id}${collectionQuery}`);
     },
-    [router]
+    [collection?.id, router],
   );
 
   const saveDateUpdates = useCallback(
@@ -615,7 +930,9 @@ export default function WorkflowGanttChart({
           return next;
         });
         toast.success(
-          updates.length === 1 ? "Timeline updated" : "Timeline changes applied"
+          updates.length === 1
+            ? "Timeline updated"
+            : "Timeline changes applied",
         );
       } catch (error) {
         setDraftByStepId((prev) => {
@@ -630,7 +947,7 @@ export default function WorkflowGanttChart({
         setIsSaving(false);
       }
     },
-    [onUpdateStepDates]
+    [onUpdateStepDates],
   );
 
   useEffect(() => {
@@ -638,7 +955,7 @@ export default function WorkflowGanttChart({
 
     const handlePointerMove = (event) => {
       const deltaDays = Math.round(
-        ((event.clientX - dragState.startX) / chartWidth) * totalDays
+        ((event.clientX - dragState.startX) / chartWidth) * totalDays,
       );
       const newStartDate = addDays(dragState.originalStartDate, deltaDays);
       const newEndDate = addDays(dragState.originalEndDate, deltaDays);
@@ -654,7 +971,7 @@ export default function WorkflowGanttChart({
 
     const handlePointerUp = async (event) => {
       const deltaDays = Math.round(
-        ((event.clientX - dragState.startX) / chartWidth) * totalDays
+        ((event.clientX - dragState.startX) / chartWidth) * totalDays,
       );
 
       setDragState(null);
@@ -694,18 +1011,56 @@ export default function WorkflowGanttChart({
     };
   }, [chartWidth, dragState, openStep, saveDateUpdates, totalDays]);
 
-  if (!shouldRender || workflowSteps.length === 0) return null;
+  useEffect(() => {
+    if (!isTimelineOverviewOpen) return undefined;
 
-  const toggleCollapsed = () => {
-    const nextValue = !isCollapsed;
-    setIsCollapsed(nextValue);
-    if (collection?.id) {
-      window.localStorage.setItem(
-        `workflow-gantt:${collection.id}:collapsed`,
-        String(nextValue)
-      );
-    }
-  };
+    const handlePointerDown = (event) => {
+      if (timelineOverviewRef.current?.contains(event.target)) return;
+      setIsTimelineOverviewOpen(false);
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsTimelineOverviewOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isTimelineOverviewOpen]);
+
+  useEffect(() => {
+    if (!shouldRender || dragState) return;
+
+    const scrollContainer = ganttPreviewRef.current;
+    if (!scrollContainer || !chartStartDate || !chartContentStartDate) return;
+
+    const scrollKey = `${collection?.id || "workflow"}:${chartContentStartDate}:${chartContentEndDate}`;
+    if (lastTimelineScrollKeyRef.current === scrollKey) return;
+
+    lastTimelineScrollKeyRef.current = scrollKey;
+    const contextOffsetDays = dayOffset(chartStartDate, chartContentStartDate);
+    const contextOffsetPixels =
+      (contextOffsetDays / Math.max(1, totalDays)) * chartWidth;
+
+    scrollContainer.scrollLeft = Math.max(0, contextOffsetPixels - 24);
+  }, [
+    chartContentEndDate,
+    chartContentStartDate,
+    chartStartDate,
+    chartWidth,
+    collection?.id,
+    dragState,
+    shouldRender,
+    totalDays,
+  ]);
+
+  if (!shouldRender || workflowSteps.length === 0) return null;
 
   const handleDragStart = (event, step) => {
     if (!canEdit || !onUpdateStepDates) return;
@@ -720,9 +1075,47 @@ export default function WorkflowGanttChart({
     });
   };
 
+  const handleFocusNextStep = () => {
+    if (!summary.nextStep || !chartStartDate) return;
+
+    const scrollContainer = ganttPreviewRef.current;
+    if (!scrollContainer) return;
+
+    const stepOffsetDays = dayOffset(chartStartDate, summary.nextStep.startDate);
+    const stepOffsetPixels =
+      (stepOffsetDays / Math.max(1, totalDays)) * chartWidth;
+    const nextScrollLeft = Math.max(0, stepOffsetPixels - 24);
+
+    scrollContainer.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+    window.requestAnimationFrame(() => {
+      scrollContainer.scrollTo({
+        left: nextScrollLeft,
+        behavior: "smooth",
+      });
+    });
+  };
+
   const handlePreviewAssistantChanges = () => {
-    const proposal = buildAssistantProposal(assistantInput, workflowSteps);
+    const nextInput = assistantInput.trim();
+
+    if (
+      assistantProposal.length > 0 &&
+      lastAssistantPreviewInputRef.current === nextInput
+    ) {
+      ganttPreviewRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      return;
+    }
+
+    const proposal = buildAssistantProposal(nextInput, workflowSteps);
     setAssistantProposal(proposal);
+    lastAssistantPreviewInputRef.current = proposal.length ? nextInput : "";
+
     if (!proposal.length) {
       toast.error("No timeline changes found");
     }
@@ -755,13 +1148,13 @@ export default function WorkflowGanttChart({
           ...update,
           endDate: nextEndDate,
         };
-      })
+      }),
     );
   };
 
   const handleRemoveProposalStep = (stepId) => {
     setAssistantProposal((prev) =>
-      prev.filter((update) => update.step.id !== stepId)
+      prev.filter((update) => update.step.id !== stepId),
     );
   };
 
@@ -798,6 +1191,25 @@ export default function WorkflowGanttChart({
           <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">
             {summary.waiting} waiting
           </span>
+          <div ref={timelineOverviewRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setIsTimelineOverviewOpen((value) => !value)}
+              className={`inline-flex h-9 w-9 items-center justify-center rounded-md border transition ${
+                isTimelineOverviewOpen
+                  ? "border-blue-300 bg-blue-100 text-blue-700 shadow-sm"
+                  : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+              }`}
+              title="Timeline overview"
+              aria-label="Timeline overview"
+              aria-expanded={isTimelineOverviewOpen}
+            >
+              <FaClock className="h-4 w-4" />
+            </button>
+            {isTimelineOverviewOpen && (
+              <TimelineOverviewPopover metrics={timelineMetrics} />
+            )}
+          </div>
           {canEdit && (
             <button
               type="button"
@@ -808,299 +1220,288 @@ export default function WorkflowGanttChart({
               Assistant
             </button>
           )}
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:bg-slate-50"
-            title={isCollapsed ? "Expand timeline" : "Collapse timeline"}
-          >
-            {isCollapsed ? (
-              <FaChevronDown className="h-3.5 w-3.5" />
-            ) : (
-              <FaChevronUp className="h-3.5 w-3.5" />
-            )}
-            {isCollapsed ? "Expand" : "Collapse"}
-          </button>
         </div>
       </div>
 
-      {isCollapsed ? null : (
-        <>
-          {isAssistantOpen && canEdit && (
-            <div className="mb-4 rounded-md border border-blue-100 bg-blue-50/50 p-3">
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <input
-                  type="text"
-                  value={assistantInput}
-                  onChange={(event) => setAssistantInput(event.target.value)}
-                  className="min-w-0 flex-1 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                  placeholder="Timeline change request"
-                />
-                <button
-                  type="button"
-                  onClick={handlePreviewAssistantChanges}
-                  disabled={!assistantInput.trim() || isSaving}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Preview
-                </button>
-              </div>
-
-              {assistantProposal.length > 0 && (
-                <div className="mt-3 rounded-md border border-slate-200 bg-white">
-                  <div className="divide-y divide-slate-100">
-                    {assistantProposal.map((update) => (
-                      <div
-                        key={update.step.id}
-                        className="flex flex-col gap-3 px-3 py-3 text-sm lg:flex-row lg:items-center lg:justify-between"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-slate-700">
-                            {update.step.name}
-                          </div>
-                          <div className="mt-1 inline-flex items-center gap-2 text-slate-500">
-                            {formatDate(update.step.startDate)} -{" "}
-                            {formatDate(update.step.endDate)}
-                            <FaArrowRight className="h-3 w-3" />
-                            {formatDate(update.startDate)} -{" "}
-                            {formatDate(update.endDate)}
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-end gap-2">
-                          <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
-                            Start
-                            <input
-                              type="date"
-                              value={update.startDate}
-                              onChange={(event) =>
-                                handleProposalDateChange(
-                                  update.step.id,
-                                  "startDate",
-                                  event.target.value
-                                )
-                              }
-                              className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-normal text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                            />
-                          </label>
-                          <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
-                            End
-                            <input
-                              type="date"
-                              value={update.endDate}
-                              min={update.startDate}
-                              onChange={(event) =>
-                                handleProposalDateChange(
-                                  update.step.id,
-                                  "endDate",
-                                  event.target.value
-                                )
-                              }
-                              className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-normal text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveProposalStep(update.step.id)}
-                            className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-600 hover:bg-slate-50"
-                            title="Remove from proposed changes"
-                          >
-                            <FaTimes className="h-3 w-3" />
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-end gap-2 border-t border-slate-100 p-3">
-                    <button
-                      type="button"
-                      onClick={() => setAssistantProposal([])}
-                      className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-                    >
-                      <FaTimes className="h-3 w-3" />
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleApplyAssistantChanges}
-                      disabled={isSaving || !assistantProposal.length}
-                      className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Apply changes
-                    </button>
-                  </div>
-                </div>
-              )}
+      <>
+        {isAssistantOpen && canEdit && (
+          <div className="mb-4 rounded-md border border-blue-100 bg-blue-50/50 p-3">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                value={assistantInput}
+                onChange={(event) => setAssistantInput(event.target.value)}
+                className="min-w-0 flex-1 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                placeholder="Timeline change request"
+              />
+              <button
+                type="button"
+                onClick={handlePreviewAssistantChanges}
+                disabled={!assistantInput.trim() || isSaving}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Preview
+              </button>
             </div>
-          )}
 
-          {summary.nextStep && (
-            <button
-              type="button"
-              onClick={() => openStep(summary.nextStep)}
-              className="mb-4 flex w-full flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm text-slate-700 hover:border-blue-200 hover:bg-blue-50/50 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="font-medium">Next: {summary.nextStep.name}</div>
-              <div className="text-slate-500">
-                {formatDate(summary.nextStep.startDate)} to{" "}
-                {formatDate(
-                  summary.nextStep.endDate || summary.nextStep.startDate
-                )}
-              </div>
-            </button>
-          )}
-
-          <div className="overflow-x-auto">
-            <div className="min-w-[960px]">
-              <div className="grid grid-cols-[280px_minmax(720px,1fr)] border-b border-slate-200 pb-2 text-xs font-medium uppercase text-slate-500">
-                <div>Step</div>
-                <div className="relative" style={{ width: chartWidth }}>
-                  {ticks.map((tick) => (
-                    <span
-                      key={`${tick.offset}-${tick.label}`}
-                      className="absolute top-0 -translate-x-1/2 whitespace-nowrap"
-                      style={{
-                        left: `${clamp(
-                          (tick.offset / Math.max(1, totalDays)) * 100,
-                          0,
-                          100
-                        )}%`,
-                      }}
-                    >
-                      {tick.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="divide-y divide-slate-100">
-                {workflowSteps.map((step) => {
-                  const statusStyle = getStatusStyle(step.status);
-                  const StatusIcon = statusStyle.Icon;
-                  const left =
-                    (dayOffset(startDate, step.startDate) /
-                      Math.max(1, totalDays)) *
-                    100;
-                  const width =
-                    (daysBetweenInclusive(step.startDate, step.endDate) /
-                      Math.max(1, totalDays)) *
-                    100;
-                  const preview = assistantProposalByStepId.get(step.id);
-                  const previewLeft = preview
-                    ? (dayOffset(startDate, preview.startDate) /
-                        Math.max(1, totalDays)) *
-                      100
-                    : 0;
-                  const previewWidth = preview
-                    ? (daysBetweenInclusive(preview.startDate, preview.endDate) /
-                        Math.max(1, totalDays)) *
-                      100
-                    : 0;
-                  const isDragging = dragState?.step.id === step.id;
-
-                  return (
+            {assistantProposal.length > 0 && (
+              <div className="mt-3 rounded-md border border-slate-200 bg-white">
+                <div className="divide-y divide-slate-100">
+                  {assistantProposal.map((update) => (
                     <div
-                      key={step.id}
-                      className="grid min-h-[64px] grid-cols-[280px_minmax(720px,1fr)] items-center py-3"
+                      key={update.step.id}
+                      className="flex flex-col gap-3 px-3 py-3 text-sm lg:flex-row lg:items-center lg:justify-between"
                     >
-                      <div className="pr-4">
-                        <button
-                          type="button"
-                          onClick={() => openStep(step)}
-                          className="block max-w-full truncate text-left text-sm font-medium text-slate-800 hover:text-blue-700"
-                        >
-                          {step.name || step.title || step.url || "Untitled step"}
-                        </button>
-                        <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 capitalize ${statusStyle.chip}`}
-                          >
-                            <StatusIcon className="h-3 w-3" />
-                            {step.status}
-                          </span>
-                          {step.workflowMetadata?.ownerRole && (
-                            <span className="inline-flex min-w-0 items-center gap-1 truncate">
-                              <FaUser className="h-3 w-3 shrink-0" />
-                              <span className="truncate">
-                                {step.workflowMetadata.ownerRole}
-                              </span>
-                            </span>
-                          )}
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-slate-700">
+                          {update.step.name}
+                        </div>
+                        <div className="mt-1 inline-flex items-center gap-2 text-slate-500">
+                          {formatDate(update.step.startDate)} -{" "}
+                          {formatDate(update.step.endDate)}
+                          <FaArrowRight className="h-3 w-3" />
+                          {formatDate(update.startDate)} -{" "}
+                          {formatDate(update.endDate)}
                         </div>
                       </div>
-
-                      <div
-                        className="relative h-10 rounded-sm bg-slate-50"
-                        style={{ width: chartWidth }}
-                      >
-                        {ticks.map((tick) => (
-                          <span
-                            key={`${step.id}-${tick.offset}`}
-                            className="absolute top-0 h-10 border-l border-slate-200"
-                            style={{
-                              left: `${clamp(
-                                (tick.offset / Math.max(1, totalDays)) * 100,
-                                0,
-                                100
-                              )}%`,
-                            }}
+                      <div className="flex flex-wrap items-end gap-2">
+                        <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
+                          Start
+                          <input
+                            type="date"
+                            value={update.startDate}
+                            onChange={(event) =>
+                              handleProposalDateChange(
+                                update.step.id,
+                                "startDate",
+                                event.target.value,
+                              )
+                            }
+                            className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-normal text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                           />
-                        ))}
-                        {preview && (
-                          <button
-                            type="button"
-                            onClick={() => openStep(step)}
-                            className="absolute top-1 z-10 flex h-8 min-w-[36px] items-center rounded-sm border border-blue-500 bg-blue-50/90 px-2 text-xs font-medium text-blue-700 shadow-sm"
-                            style={{
-                              left: `${clamp(previewLeft, 0, 100)}%`,
-                              width: `${clamp(previewWidth, 2, 100)}%`,
-                            }}
-                            title={`Proposed: ${formatDate(
-                              preview.startDate
-                            )} to ${formatDate(preview.endDate)}`}
-                          >
-                            <span className="truncate">
-                              {formatDate(preview.startDate)} -{" "}
-                              {formatDate(preview.endDate)}
-                            </span>
-                          </button>
-                        )}
+                        </label>
+                        <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
+                          End
+                          <input
+                            type="date"
+                            value={update.endDate}
+                            min={update.startDate}
+                            onChange={(event) =>
+                              handleProposalDateChange(
+                                update.step.id,
+                                "endDate",
+                                event.target.value,
+                              )
+                            }
+                            className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-normal text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          />
+                        </label>
                         <button
                           type="button"
-                          onPointerDown={(event) => handleDragStart(event, step)}
-                          onClick={() => openStep(step)}
-                          disabled={isSaving}
-                          className={`absolute top-2 flex h-6 min-w-[28px] items-center rounded-sm px-2 text-xs font-medium text-white shadow-sm ${
-                            statusStyle.bar
-                          } ${
-                            canEdit
-                              ? "cursor-grab active:cursor-grabbing"
-                              : "cursor-pointer"
-                          } ${isDragging ? "ring-2 ring-blue-200" : ""} ${
-                            preview ? "opacity-45" : ""
-                          }`}
-                          style={{
-                            left: `${clamp(left, 0, 100)}%`,
-                            width: `${clamp(width, 2, 100)}%`,
-                          }}
-                          title={`${step.name}: ${formatDate(
-                            step.startDate
-                          )} to ${formatDate(step.endDate || step.startDate)}`}
+                          onClick={() =>
+                            handleRemoveProposalStep(update.step.id)
+                          }
+                          className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-600 hover:bg-slate-50"
+                          title="Remove from proposed changes"
                         >
-                          <span className="truncate">
-                            {formatDate(step.startDate)} -{" "}
-                            {formatDate(step.endDate || step.startDate)}
-                          </span>
+                          <FaTimes className="h-3 w-3" />
+                          Remove
                         </button>
                       </div>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+                <div className="flex justify-end gap-2 border-t border-slate-100 p-3">
+                  <button
+                    type="button"
+                    onClick={() => setAssistantProposal([])}
+                    className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                  >
+                    <FaTimes className="h-3 w-3" />
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyAssistantChanges}
+                    disabled={isSaving || !assistantProposal.length}
+                    className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Apply changes
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {summary.nextStep && (
+          <button
+            type="button"
+            onClick={handleFocusNextStep}
+            className="mb-4 flex w-full flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm text-slate-700 hover:border-blue-200 hover:bg-blue-50/50 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="font-medium">Next: {summary.nextStep.name}</div>
+            <div className="text-slate-500">
+              {formatDate(summary.nextStep.startDate)} to{" "}
+              {formatDate(
+                summary.nextStep.endDate || summary.nextStep.startDate,
+              )}
+            </div>
+          </button>
+        )}
+
+        <div ref={ganttPreviewRef} className="scroll-mt-6 overflow-x-auto">
+          <div className="min-w-[960px]">
+            <div className="grid grid-cols-[280px_minmax(720px,1fr)] border-b border-slate-200 pb-2 text-xs font-medium uppercase text-slate-500">
+              <div className="sticky left-0 z-30 bg-white pr-4 shadow-[8px_0_12px_-12px_rgba(15,23,42,0.35)]">
+                Step
+              </div>
+              <div className="relative" style={{ width: chartWidth }}>
+                {ticks.map((tick) => (
+                  <span
+                    key={`${tick.offset}-${tick.label}`}
+                    className="absolute top-0 -translate-x-1/2 whitespace-nowrap"
+                    style={{
+                      left: `${clamp(
+                        (tick.offset / Math.max(1, totalDays)) * 100,
+                        0,
+                        100,
+                      )}%`,
+                    }}
+                  >
+                    {tick.label}
+                  </span>
+                ))}
               </div>
             </div>
+
+            <div className="divide-y divide-slate-100">
+              {workflowSteps.map((step) => {
+                const statusStyle = getStatusStyle(step.status);
+                const StatusIcon = statusStyle.Icon;
+                const left =
+                  (dayOffset(chartStartDate, step.startDate) /
+                    Math.max(1, totalDays)) *
+                  100;
+                const width =
+                  (daysBetweenInclusive(step.startDate, step.endDate) /
+                    Math.max(1, totalDays)) *
+                  100;
+                const preview = assistantProposalByStepId.get(step.id);
+                const previewLeft = preview
+                  ? (dayOffset(chartStartDate, preview.startDate) /
+                      Math.max(1, totalDays)) *
+                    100
+                  : 0;
+                const previewWidth = preview
+                  ? (daysBetweenInclusive(preview.startDate, preview.endDate) /
+                      Math.max(1, totalDays)) *
+                    100
+                  : 0;
+                const isDragging = dragState?.step.id === step.id;
+
+                return (
+                  <div
+                    key={step.id}
+                    className="grid min-h-[64px] grid-cols-[280px_minmax(720px,1fr)] items-center py-3"
+                  >
+                    <div className="sticky left-0 z-20 flex self-stretch flex-col justify-center bg-white pr-4 shadow-[8px_0_12px_-12px_rgba(15,23,42,0.35)]">
+                      <button
+                        type="button"
+                        onClick={() => openStep(step)}
+                        className="block max-w-full truncate text-left text-sm font-medium text-slate-800 hover:text-blue-700"
+                      >
+                        {step.name || step.title || step.url || "Untitled step"}
+                      </button>
+                      <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 capitalize ${statusStyle.chip}`}
+                        >
+                          <StatusIcon className="h-3 w-3" />
+                          {step.status}
+                        </span>
+                        {step.workflowMetadata?.ownerRole && (
+                          <span className="inline-flex min-w-0 items-center gap-1 truncate">
+                            <FaUser className="h-3 w-3 shrink-0" />
+                            <span className="truncate">
+                              {step.workflowMetadata.ownerRole}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div
+                      className="relative h-10 rounded-sm bg-slate-50"
+                      style={{ width: chartWidth }}
+                    >
+                      {ticks.map((tick) => (
+                        <span
+                          key={`${step.id}-${tick.offset}`}
+                          className="absolute top-0 h-10 border-l border-slate-200"
+                          style={{
+                            left: `${clamp(
+                              (tick.offset / Math.max(1, totalDays)) * 100,
+                              0,
+                              100,
+                            )}%`,
+                          }}
+                        />
+                      ))}
+                      {preview && (
+                        <button
+                          type="button"
+                          onClick={() => openStep(step)}
+                          className="absolute top-1 z-10 flex h-8 min-w-[36px] items-center rounded-sm border border-blue-500 bg-blue-50/90 px-2 text-xs font-medium text-blue-700 shadow-sm"
+                          style={{
+                            left: `${clamp(previewLeft, 0, 100)}%`,
+                            width: `${clamp(previewWidth, 2, 100)}%`,
+                          }}
+                          title={`Proposed: ${formatDate(
+                            preview.startDate,
+                          )} to ${formatDate(preview.endDate)}`}
+                        >
+                          <span className="truncate">
+                            {formatDate(preview.startDate)} -{" "}
+                            {formatDate(preview.endDate)}
+                          </span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onPointerDown={(event) => handleDragStart(event, step)}
+                        onClick={() => openStep(step)}
+                        disabled={isSaving}
+                        className={`absolute top-2 flex h-6 min-w-[28px] items-center rounded-sm px-2 text-xs font-medium text-white shadow-sm ${
+                          statusStyle.bar
+                        } ${
+                          canEdit
+                            ? "cursor-grab active:cursor-grabbing"
+                            : "cursor-pointer"
+                        } ${isDragging ? "ring-2 ring-blue-200" : ""} ${
+                          preview ? "opacity-45" : ""
+                        }`}
+                        style={{
+                          left: `${clamp(left, 0, 100)}%`,
+                          width: `${clamp(width, 2, 100)}%`,
+                        }}
+                        title={`${step.name}: ${formatDate(
+                          step.startDate,
+                        )} to ${formatDate(step.endDate || step.startDate)}`}
+                      >
+                        <span className="truncate">
+                          {formatDate(step.startDate)} -{" "}
+                          {formatDate(step.endDate || step.startDate)}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </>
-      )}
+        </div>
+      </>
     </section>
   );
 }

@@ -101,7 +101,7 @@ const Fundraiser = ({ event, isAdmin, userId, onDelete, onCopy }) => {
           <h2 className="text-lg font-bold text-center">Event Information</h2>
           <hr className="my-2" />
           <p className="text-gray-600 text-center">
-            Organization: {info.organization}
+            Business Unit: {info.organization}
           </p>
           <p className="text-gray-600 text-center">
             Approved By: {info.approvedBy}
@@ -265,7 +265,7 @@ const Fundraiser = ({ event, isAdmin, userId, onDelete, onCopy }) => {
                     width={48}
                     height={48}
                     src={imageUrl}
-                    alt={org.name || "Organization"}
+                    alt={org.name || "Business Unit"}
                     className="object-contain rounded-md shadow-lg bg-white p-2"
                   />
                 ) : (

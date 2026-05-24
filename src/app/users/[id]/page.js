@@ -66,7 +66,7 @@ const OrganizationPage = () => {
   const handleSave = async () => {
     try {
       // Replace with your actual API call
-      //   const response = await fetch(`/api/organizations/${id}`, {
+      //   const response = await fetch(`/api/business-units/${id}`, {
       //     method: "PUT",
       //     headers: {
       //       "Content-Type": "application/json",
@@ -191,7 +191,7 @@ const OrganizationPage = () => {
             {user.isVerified && (
               <FaCheckCircle
                 className="text-blue-500 text-2xl"
-                title="Verified Organization"
+                title="Verified Business Unit"
               />
             )}
           </div>

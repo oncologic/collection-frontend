@@ -30,7 +30,7 @@ const AddCollectionsModal = ({
       items.some((item) => item.id === collection.id)
     );
     setCurrentCollections(current);
-  }, []);
+  }, [collections, items]);
 
   const filteredCollections = itemsToDisplay.filter((collection) => {
     const matchesSearch =

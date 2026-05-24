@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from "react";
+import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import {
   FaMagic,
   FaPlus,
@@ -33,6 +33,44 @@ import InputField from "./inputs/InputField";
 import MultiSelect from "./inputs/MultiSelect";
 import CustomEditor from "./common/CustomEditor";
 import { DateTime } from "luxon";
+
+const levenshteinDistance = (str1, str2) => {
+  const matrix = [];
+
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+
+  return matrix[str2.length][str1.length];
+};
+
+const calculateSimilarity = (str1, str2) => {
+  const longer = str1.length > str2.length ? str1 : str2;
+  const shorter = str1.length > str2.length ? str2 : str1;
+
+  if (longer.length === 0) return 1.0;
+
+  const distance = levenshteinDistance(longer, shorter);
+  return (longer.length - distance) / longer.length;
+};
 
 const ResourceAICreate = ({
   onClose,
@@ -198,28 +236,8 @@ const ResourceAICreate = ({
   const { mutateAsync: processImageMutation } = useProcessImage();
   const createOrganizationMutation = useCreateOrganization();
 
-  // Re-run duplicate detection when preview resources change (for real-time updates)
-  useEffect(() => {
-    if (previewResources.length > 0 && existingResources.length > 0) {
-      const prevWarningCount = duplicateWarnings.length;
-      const newWarnings = detectDuplicates(previewResources);
-
-      // Show notification if duplicate warnings were resolved
-      if (prevWarningCount > 0 && newWarnings.length < prevWarningCount) {
-        const resolvedCount = prevWarningCount - newWarnings.length;
-        toast.success(
-          `✅ Resolved ${resolvedCount} duplicate warning${
-            resolvedCount > 1 ? "s" : ""
-          }`
-        );
-      }
-
-      setDuplicateWarnings(newWarnings);
-    }
-  }, [previewResources, existingResources, duplicateWarnings.length]);
-
   // Duplicate detection function
-  const detectDuplicates = (newResources) => {
+  const detectDuplicates = useCallback((newResources) => {
     if (!existingResources.length) return [];
 
     const warnings = [];
@@ -285,52 +303,38 @@ const ResourceAICreate = ({
     });
 
     return warnings;
-  };
+  }, [existingResources]);
 
-  // Calculate string similarity (Levenshtein distance based)
-  const calculateSimilarity = (str1, str2) => {
-    const longer = str1.length > str2.length ? str1 : str2;
-    const shorter = str1.length > str2.length ? str2 : str1;
+  // Re-run duplicate detection when preview resources change (for real-time updates)
+  useEffect(() => {
+    if (previewResources.length > 0 && existingResources.length > 0) {
+      const prevWarningCount = duplicateWarnings.length;
+      const newWarnings = detectDuplicates(previewResources);
 
-    if (longer.length === 0) return 1.0;
-
-    const distance = levenshteinDistance(longer, shorter);
-    return (longer.length - distance) / longer.length;
-  };
-
-  // Levenshtein distance calculation
-  const levenshteinDistance = (str1, str2) => {
-    const matrix = [];
-
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
-    }
-
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
-    }
-
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          );
-        }
+      // Show notification if duplicate warnings were resolved
+      if (prevWarningCount > 0 && newWarnings.length < prevWarningCount) {
+        const resolvedCount = prevWarningCount - newWarnings.length;
+        toast.success(
+          `✅ Resolved ${resolvedCount} duplicate warning${
+            resolvedCount > 1 ? "s" : ""
+          }`
+        );
       }
-    }
 
-    return matrix[str2.length][str1.length];
-  };
+      setDuplicateWarnings(newWarnings);
+    }
+  }, [
+    previewResources,
+    existingResources.length,
+    duplicateWarnings.length,
+    detectDuplicates,
+  ]);
+
   const queryClient = useQueryClient();
 
   const handleQuickCreateOrganization = async () => {
     if (!newOrgName.trim()) {
-      toast.error("Organization name is required");
+      toast.error("Business unit name is required");
       return;
     }
 
@@ -375,10 +379,10 @@ const ResourceAICreate = ({
       setNewOrgName("");
       setNewOrgWebsite("");
       setShowQuickCreateOrg(false);
-      toast.success("Organization created and selected");
+      toast.success("Business unit created and selected");
     } catch (error) {
       console.error("Error creating organization:", error);
-      toast.error(error.message || "Failed to create organization");
+      toast.error(error.message || "Failed to create business unit");
     }
   };
 
@@ -484,7 +488,7 @@ const ResourceAICreate = ({
     }
 
     if (selectedOrganizations.length === 0) {
-      toast.error("Please select at least one organization for the resources");
+      toast.error("Please select at least one business unit for the resources");
       return;
     }
 
@@ -573,7 +577,7 @@ const ResourceAICreate = ({
               setShowOrganizationFirst(true);
               setShowPreview(false);
               toast(
-                `Found ${orgsWithTempIds.length} new organization${
+                `Found ${orgsWithTempIds.length} new business unit${
                   orgsWithTempIds.length > 1 ? "s" : ""
                 } to create first`,
                 {
@@ -663,7 +667,7 @@ const ResourceAICreate = ({
         }`;
         const orgMsg =
           orgCount > 0
-            ? ` and found ${orgCount} new organization${
+            ? ` and found ${orgCount} new business unit${
                 orgCount > 1 ? "s" : ""
               }`
             : "";
@@ -749,7 +753,7 @@ const ResourceAICreate = ({
   // Confirm and create organizations first
   const handleConfirmOrganizations = async () => {
     if (newOrganizations.length === 0) {
-      toast.error("No organizations to create");
+      toast.error("No business units to create");
       return;
     }
 
@@ -771,7 +775,7 @@ const ResourceAICreate = ({
         result.results.createdOrganizations.length > 0
       ) {
         toast.success(
-          `Created ${result.results.createdOrganizations.length} organization${
+          `Created ${result.results.createdOrganizations.length} business unit${
             result.results.createdOrganizations.length > 1 ? "s" : ""
           }`
         );
@@ -794,7 +798,7 @@ const ResourceAICreate = ({
       }
     } catch (error) {
       console.error("Error creating organizations:", error);
-      toast.error(error.message || "Failed to create organizations");
+      toast.error(error.message || "Failed to create business units");
     } finally {
       setIsConfirming(false);
     }
@@ -951,10 +955,10 @@ const ResourceAICreate = ({
             <div className="p-6">
               <div className="mb-6">
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  New Organizations Found
+                  New Business Units Found
                 </h3>
                 <p className="text-gray-600">
-                  We found {newOrganizations.length} new organization
+                  We found {newOrganizations.length} new business unit
                   {newOrganizations.length > 1 ? "s" : ""} that need to be
                   created before we can create the resources.
                 </p>
@@ -968,7 +972,7 @@ const ResourceAICreate = ({
                   >
                     <div className="flex items-start justify-between mb-4">
                       <h4 className="text-lg font-medium text-gray-900">
-                        New Organization {index + 1}
+                        New Business Unit {index + 1}
                       </h4>
                       <div className="flex space-x-2">
                         <button
@@ -978,7 +982,7 @@ const ResourceAICreate = ({
                             )
                           }
                           className="text-blue-600 hover:text-blue-700"
-                          title="Edit organization"
+                          title="Edit business unit"
                         >
                           <FaEdit />
                         </button>
@@ -990,7 +994,7 @@ const ResourceAICreate = ({
                             setNewOrganizations(updatedOrgs);
                           }}
                           className="text-red-600 hover:text-red-700"
-                          title="Delete organization"
+                          title="Delete business unit"
                         >
                           <FaTimes />
                         </button>
@@ -1001,7 +1005,7 @@ const ResourceAICreate = ({
                       // Edit Mode
                       <div className="space-y-4">
                         <InputField
-                          label="Organization Name"
+                          label="Business Unit Name"
                           value={org.name || ""}
                           onChange={(e) => {
                             const updatedOrgs = [...newOrganizations];
@@ -1142,7 +1146,7 @@ const ResourceAICreate = ({
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-medium text-gray-700">
-                      Organizations{" "}
+                      Business Units{" "}
                       <span className="text-xs font-normal text-gray-500">
                         (required)
                       </span>
@@ -1163,18 +1167,18 @@ const ResourceAICreate = ({
                     value={selectedOrganizations}
                     onChange={(orgs) => setSelectedOrganizations(orgs)}
                     options={filteredOrganizations}
-                    placeholder="Select organizations..."
+                    placeholder="Select business units..."
                     required
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     All generated resources will be associated with these
-                    organizations
+                    business units
                   </p>
                   {showQuickCreateOrg && (
                     <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-sm font-semibold text-gray-700">
-                          Create New Organization
+                          Create New Business Unit
                         </h4>
                         <button
                           type="button"
@@ -1191,7 +1195,7 @@ const ResourceAICreate = ({
                       <div className="space-y-3">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Organization Name{" "}
+                            Business Unit Name{" "}
                             <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -1199,7 +1203,7 @@ const ResourceAICreate = ({
                             value={newOrgName}
                             onChange={(e) => setNewOrgName(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="Enter organization name"
+                            placeholder="Enter business unit name"
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
@@ -1523,7 +1527,7 @@ const ResourceAICreate = ({
                           <div className="flex items-center space-x-2">
                             <FaGlobeAmericas className="text-blue-600" />
                             <span className="text-sm font-medium text-blue-800">
-                              Selected Organizations:{" "}
+                              Selected Business Units:{" "}
                               {selectedOrganizations
                                 .map((org) => org.name)
                                 .join(", ")}
@@ -1542,7 +1546,7 @@ const ResourceAICreate = ({
                                 );
                               });
                               toast.success(
-                                "Applied selected organizations to all resources"
+                                "Applied selected business units to all resources"
                               );
                             }}
                             className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition-colors"
@@ -1646,7 +1650,7 @@ const ResourceAICreate = ({
                             />
 
                             <MultiSelect
-                              label="Organizations"
+                              label="Business Units"
                               value={filteredOrganizations.filter((org) =>
                                 resource.organizations?.includes(org.id)
                               )}
@@ -1658,7 +1662,7 @@ const ResourceAICreate = ({
                                 )
                               }
                               options={filteredOrganizations}
-                              placeholder="Select organizations"
+                              placeholder="Select business units"
                             />
 
                             <div>
@@ -1795,7 +1799,7 @@ const ResourceAICreate = ({
                             <div className="mb-3 p-3 bg-gray-50 rounded-lg">
                               <div className="flex items-center justify-between mb-2">
                                 <label className="block text-xs font-medium text-gray-700">
-                                  Organizations (click to change):
+                                  Business Units (click to change):
                                 </label>
                                 {resource.organizations?.length > 0 && (
                                   <button
@@ -1820,7 +1824,7 @@ const ResourceAICreate = ({
                                   )
                                 }
                                 options={filteredOrganizations}
-                                placeholder="Select organizations"
+                                placeholder="Select business units"
                               />
                             </div>
 
@@ -1829,7 +1833,7 @@ const ResourceAICreate = ({
                                 <div className="flex items-center space-x-2">
                                   <FaGlobeAmericas className="text-gray-500" />
                                   <span className="text-gray-600">
-                                    {resource.organizations.length} organization
+                                    {resource.organizations.length} business unit
                                     {resource.organizations.length > 1
                                       ? "s"
                                       : ""}
@@ -1904,7 +1908,7 @@ const ResourceAICreate = ({
                 <div className="mt-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-semibold text-gray-900">
-                      New Organizations to Create ({newOrganizations.length})
+                      New Business Units to Create ({newOrganizations.length})
                     </h3>
                     <button
                       onClick={() =>
@@ -1929,7 +1933,7 @@ const ResourceAICreate = ({
                         >
                           <div className="flex items-start justify-between mb-4">
                             <h4 className="text-lg font-medium text-gray-900">
-                              New Organization {index + 1}
+                              New Business Unit {index + 1}
                             </h4>
                             <div className="flex space-x-2">
                               <button
@@ -1939,7 +1943,7 @@ const ResourceAICreate = ({
                                   )
                                 }
                                 className="text-blue-600 hover:text-blue-700"
-                                title="Edit organization"
+                                title="Edit business unit"
                               >
                                 <FaEdit />
                               </button>
@@ -1951,7 +1955,7 @@ const ResourceAICreate = ({
                                   setNewOrganizations(updatedOrgs);
                                 }}
                                 className="text-red-600 hover:text-red-700"
-                                title="Delete organization"
+                                title="Delete business unit"
                               >
                                 <FaTimes />
                               </button>
@@ -2028,13 +2032,13 @@ const ResourceAICreate = ({
                   {isConfirming ? (
                     <>
                       <FaSpinner className="animate-spin" />
-                      <span>Creating Organizations...</span>
+                      <span>Creating Business Units...</span>
                     </>
                   ) : (
                     <>
                       <FaCheck />
                       <span>
-                        Create {newOrganizations.length} Organization
+                        Create {newOrganizations.length} Business Unit
                         {newOrganizations.length > 1 ? "s" : ""} & Continue
                       </span>
                     </>
@@ -2081,7 +2085,7 @@ const ResourceAICreate = ({
                         Create {previewResources.length} Resource
                         {previewResources.length > 1 ? "s" : ""}
                         {newOrganizations.length > 0 &&
-                          ` & ${newOrganizations.length} Organization${
+                          ` & ${newOrganizations.length} Business Unit${
                             newOrganizations.length > 1 ? "s" : ""
                           }`}
                         {duplicateWarnings.length > 0 && " (Check Duplicates)"}

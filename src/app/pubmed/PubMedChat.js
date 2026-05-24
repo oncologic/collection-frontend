@@ -89,6 +89,11 @@ const PubMedChat = forwardRef(function PubMedChat(
 
   const textareaRef = useRef(null);
   const chatEndRef = useRef(null);
+  const contentSearchMutationRef = useRef(contentSearchMutation);
+
+  useEffect(() => {
+    contentSearchMutationRef.current = contentSearchMutation;
+  }, [contentSearchMutation]);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
@@ -151,7 +156,7 @@ const PubMedChat = forwardRef(function PubMedChat(
         }))
       );
     }
-  }, [isOpen]);
+  }, [isOpen, history.length]);
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
@@ -182,7 +187,7 @@ const PubMedChat = forwardRef(function PubMedChat(
   useEffect(() => {
     if (mentionQuery && mentionQuery.length >= 2) {
       const timeoutId = setTimeout(() => {
-        contentSearchMutation.mutate(
+        contentSearchMutationRef.current.mutate(
           { searchQuery: mentionQuery },
           {
             onSuccess: (data) => {

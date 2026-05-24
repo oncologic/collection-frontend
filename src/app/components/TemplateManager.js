@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useContextAuth } from "../context/authContext";
 import { FaCheck, FaGlobe, FaEdit, FaTrash, FaSpinner } from "react-icons/fa";
 import toast from "react-hot-toast";
@@ -11,11 +11,7 @@ const TemplateManager = ({ externalLinkId, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(null);
 
-  useEffect(() => {
-    fetchTemplates();
-  }, [externalLinkId]);
-
-  const fetchTemplates = async () => {
+  const fetchTemplates = useCallback(async () => {
     try {
       const headers = await getAuthHeader();
       const response = await fetch(
@@ -33,7 +29,11 @@ const TemplateManager = ({ externalLinkId, onClose }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [externalLinkId, getAuthHeader]);
+
+  useEffect(() => {
+    fetchTemplates();
+  }, [fetchTemplates]);
 
   const setAsPublicTemplate = async (templateId) => {
     setUpdating(templateId);

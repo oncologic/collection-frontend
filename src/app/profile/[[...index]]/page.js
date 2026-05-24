@@ -1,19 +1,16 @@
 "use client";
 import { UserProfile, useUser, useAuth } from "@clerk/nextjs";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm, FormProvider, Controller } from "react-hook-form";
 import SelectField from "@/app/components/inputs/SelectField";
 import MultiSelect from "@/app/components/inputs/MultiSelect";
 import InputField from "@/app/components/inputs/InputField";
 import Link from "next/link";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCredits } from "@/app/hooks/useAI";
 import { updateUserProfile } from "@/app/api/api";
 import { useContextAuth } from "@/app/context/authContext";
 import { toast } from "react-hot-toast";
-import { StripeProvider } from "@/app/providers/StripeProvider";
-import { CheckoutForm } from "@/app/components/payments/CheckoutForm";
 import AICreditsBalance from "@/app/components/AICreditsBalance";
 import {
   FaUser,
@@ -21,10 +18,8 @@ import {
   FaChartLine,
   FaCalendarAlt,
   FaCoins,
-  FaGift,
   FaChevronDown,
   FaChevronUp,
-  FaPlus,
 } from "react-icons/fa";
 
 // Add designationOptions at the component level
@@ -47,11 +42,6 @@ const designationOptions = [
   { id: "pharmd", name: "PharmD - Doctor of Pharmacy" },
   { id: "dds", name: "DDS - Doctor of Dental Surgery" },
   { id: "dpm", name: "DPM - Doctor of Podiatric Medicine" },
-];
-
-const creditPackages = [
-  { id: "basic", credits: 35, price: 5, description: "Basic Package" },
-  { id: "premium", credits: 100, price: 15, description: "Premium Package" },
 ];
 
 export default function Page() {
@@ -77,7 +67,7 @@ export default function Page() {
   const [isLoading, setIsLoading] = useState(false);
   const [isQuestionsExpanded, setIsQuestionsExpanded] = useState(false);
 
-  const { balance, transactions, createCheckoutSession } = useCredits();
+  const { balance, transactions } = useCredits();
   const { getToken } = useAuth();
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState(null);
@@ -87,8 +77,6 @@ export default function Page() {
 
   // Rename state for clarity
   const [includeUpdatedSince, setIncludeUpdatedSince] = useState(true);
-
-  const queryClient = useQueryClient();
 
   // Add this near your other useState declarations
   const [isTransactionsExpanded, setIsTransactionsExpanded] = useState(false);
@@ -101,15 +89,15 @@ export default function Page() {
   }, [balance.data]);
 
   // Define options for role selection
-  const roleOptions = [
+  const roleOptions = useMemo(() => [
     { id: "patient", name: "Patient" },
     { id: "researcher", name: "Researcher" },
     { id: "caregiver", name: "Caregiver" },
     { id: "clinician", name: "Clinician" },
-  ];
+  ], []);
 
   // Define cancer type options
-  const cancerTypeOptions = [
+  const cancerTypeOptions = useMemo(() => [
     { id: "clear-cell", name: "Clear Cell Renal Cell Carcinoma" },
     { id: "papillary", name: "Papillary Renal Cell Carcinoma" },
     { id: "chromophobe", name: "Chromophobe Renal Cell Carcinoma" },
@@ -117,7 +105,7 @@ export default function Page() {
     { id: "rmc", name: "Renal Medullary Carcinoma" },
     { id: "collecting-duct", name: "Collecting Duct Carcinoma" },
     { id: "other", name: "Other" },
-  ];
+  ], []);
 
   // Update the useEffect that populates form data
   useEffect(() => {
@@ -168,11 +156,11 @@ export default function Page() {
       // Set the form values
       methods.reset(resetValues);
     }
-  }, [customUserData]);
+  }, [cancerTypeOptions, customUserData, methods, roleOptions]);
 
   // Add this effect to handle role changes
   useEffect(() => {
-    const currentRole = methods.watch("userRole")?.id;
+    const currentRole = selectedRole;
 
     if (["patient", "caregiver"].includes(currentRole)) {
       methods.setValue("designations", []);
@@ -181,7 +169,7 @@ export default function Page() {
       methods.setValue("cancerType", null);
       methods.setValue("yearOfBirth", "");
     }
-  }, [methods.watch("userRole")]);
+  }, [methods, selectedRole]);
 
   const handleSubmit = async (data) => {
     try {
@@ -231,27 +219,6 @@ export default function Page() {
       />
     </div>
   );
-
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [selectedPackage, setSelectedPackage] = useState(null);
-  const [clientSecret, setClientSecret] = useState(null);
-
-  const handlePurchaseCredits = async (pkg) => {
-    if (isProcessingPayment) return;
-    setSelectedPackage(pkg);
-    setShowPaymentForm(true);
-
-    try {
-      const { clientSecret } = await createCheckoutSession.mutateAsync({
-        packageId: pkg.id,
-      });
-      setClientSecret(clientSecret);
-    } catch (error) {
-      toast.error("Failed to initialize payment");
-      setShowPaymentForm(false);
-    }
-  };
 
   // Enhanced Credits Info Component
   const CreditsInfoCard = () => {
@@ -417,55 +384,6 @@ export default function Page() {
                   ))}
                 </div>
               )}
-
-              {/* Purchase Credits Section */}
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                  <FaPlus className="text-blue-600" />
-                  Purchase Additional Credits
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {creditPackages.map((pkg) => (
-                    <div
-                      key={pkg.id}
-                      className="bg-white border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-sm transition-all"
-                    >
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h5 className="font-medium text-gray-800">
-                            {pkg.description}
-                          </h5>
-                          <p className="text-sm text-gray-600">
-                            {pkg.credits} Credits
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-2xl font-bold text-blue-600">
-                            ${pkg.price}
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handlePurchaseCredits(pkg)}
-                        disabled={isProcessingPayment}
-                        className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2"
-                      >
-                        {isProcessingPayment ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <FaCoins />
-                            Purchase
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
         </div>
@@ -677,62 +595,6 @@ export default function Page() {
             sections={["personal_info", "contact_details", "security"]}
           />
         </div>
-
-        {/* Payment Modal */}
-        {showPaymentForm && selectedPackage && clientSecret && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-md w-full shadow-xl border border-gray-200 overflow-hidden">
-              <div className="bg-blue-500 p-4 text-white">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="text-lg font-semibold">Purchase Credits</h3>
-                    <p className="text-sm text-blue-100">
-                      {selectedPackage.credits} Credits - $
-                      {selectedPackage.price}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowPaymentForm(false);
-                      setSelectedPackage(null);
-                      setClientSecret(null);
-                    }}
-                    className="text-white/80 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div className="p-4">
-                <StripeProvider clientSecret={clientSecret}>
-                  <CheckoutForm
-                    amount={selectedPackage.price}
-                    credits={selectedPackage.credits}
-                    packageId={selectedPackage.id}
-                    onSuccess={() => {
-                      setShowPaymentForm(false);
-                      setSelectedPackage(null);
-                      setClientSecret(null);
-                      queryClient.invalidateQueries(["creditBalance"]);
-                    }}
-                  />
-                </StripeProvider>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

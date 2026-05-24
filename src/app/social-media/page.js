@@ -763,7 +763,10 @@ const SocialMediaPage = () => {
   };
 
   // Get current platform data
-  const currentPlatformData = socialProfiles[activePlatform] || {};
+  const currentPlatformData = useMemo(
+    () => socialProfiles[activePlatform] || {},
+    [activePlatform, socialProfiles]
+  );
   const activePlatformRecord = platformLookup.get(activePlatform);
   const activePlatformLabel =
     activePlatformRecord?.name ||
@@ -1269,7 +1272,7 @@ const SocialMediaPage = () => {
                         d="M9 5l7 7-7 7"
                       />
                     </svg>
-                    Associate with Collection or Organization (Optional)
+                    Associate with Collection or Business Unit (Optional)
                   </button>
 
                   {showAssociations && (
@@ -1280,7 +1283,7 @@ const SocialMediaPage = () => {
                           control={control}
                           label="Association Type"
                           options={[
-                            { id: "organization", name: "Organization" },
+                            { id: "organization", name: "Business Unit" },
                             { id: "collection", name: "Collection" },
                             { id: "external_link", name: "External Link" },
                           ]}

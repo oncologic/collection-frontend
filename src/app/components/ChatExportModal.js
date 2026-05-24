@@ -42,11 +42,23 @@ const ChatExportModal = ({
   const [loadingEnrichedData, setLoadingEnrichedData] = useState(false);
 
   const { getAuthHeader } = useContextAuth();
+  const getAuthHeaderRef = React.useRef(getAuthHeader);
+  const generatePromptContentRef = React.useRef(null);
+
+  React.useEffect(() => {
+    getAuthHeaderRef.current = getAuthHeader;
+  }, [getAuthHeader]);
+
+  React.useEffect(() => {
+    generatePromptContentRef.current = generatePromptContent;
+  });
 
   // Fetch data for each collection when the modal opens and we have collections
   React.useEffect(() => {
     if (!isOpen) {
-      setEnrichedResources({});
+      setEnrichedResources((current) =>
+        Object.keys(current).length > 0 ? {} : current
+      );
       setLoadingEnrichedData(false);
       return;
     }
@@ -66,7 +78,9 @@ const ChatExportModal = ({
       );
 
       if (uniqueCollections.length === 0) {
-        setEnrichedResources({});
+        setEnrichedResources((current) =>
+          Object.keys(current).length > 0 ? {} : current
+        );
         setLoadingEnrichedData(false);
         return;
       }
@@ -75,7 +89,7 @@ const ChatExportModal = ({
       const enrichedData = {};
 
       try {
-        const headers = await getAuthHeader();
+        const headers = await getAuthHeaderRef.current();
 
         const collectionPromises = uniqueCollections.map(async (collection) => {
           try {
@@ -111,7 +125,7 @@ const ChatExportModal = ({
     };
 
     fetchCollectionData();
-  }, [isOpen, selectedResources, referencedItems, getAuthHeader]);
+  }, [isOpen, selectedResources, referencedItems]);
 
   useEffect(() => {
     if (isOpen) {
@@ -158,7 +172,7 @@ const ChatExportModal = ({
   // Generate prompt content when enriched data and options are ready
   React.useEffect(() => {
     if (isOpen && !loadingEnrichedData) {
-      generatePromptContent();
+      generatePromptContentRef.current?.();
     }
   }, [
     isOpen,
@@ -172,7 +186,7 @@ const ChatExportModal = ({
 
   if (!isOpen) return null;
 
-  const htmlToMarkdown = (html) => {
+  function htmlToMarkdown(html) {
     if (!html) return "";
     try {
       const cleanHtml = DOMPurify.sanitize(html);
@@ -200,14 +214,14 @@ const ChatExportModal = ({
       console.error("Error converting HTML to markdown:", error);
       return html.replace(/<[^>]*>/g, "");
     }
-  };
+  }
 
-  const stripHtml = (html) => {
+  function stripHtml(html) {
     if (!html) return "";
     return DOMPurify.sanitize(html, { ALLOWED_TAGS: [] });
-  };
+  }
 
-  const generatePromptContent = () => {
+  function generatePromptContent() {
     let prompt = `# AI Chat Export\n\n`;
     prompt += `**Export Date:** ${new Date().toLocaleDateString()}\n\n`;
 
@@ -504,7 +518,7 @@ const ChatExportModal = ({
     }
 
     setPromptContent(prompt);
-  };
+  }
 
   const handleCopy = () => {
     navigator.clipboard

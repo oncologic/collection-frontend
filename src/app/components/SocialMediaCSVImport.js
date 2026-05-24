@@ -634,7 +634,7 @@ X,Community,Private,Patient Advocate,patientadvocate,https://x.com/patientadvoca
                         setBulkAssociationItem(null);
                       }}
                       options={[
-                        { id: "organization", name: "Organization" },
+                        { id: "organization", name: "Business Unit" },
                         { id: "collection", name: "Collection" },
                         { id: "external_link", name: "External Link" },
                       ]}

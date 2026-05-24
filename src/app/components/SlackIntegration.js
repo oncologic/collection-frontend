@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useContextAuth } from '@/app/context/authContext';
 import { FaSlack, FaPlus, FaCog, FaTrash, FaExclamationCircle, FaSpinner, FaCheck } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
@@ -26,15 +26,7 @@ export default function SlackIntegration({
   const [isAdmin, setIsAdmin] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
 
-  useEffect(() => {
-    if (systemUser && selectedTenants?.length) {
-      checkAdminStatus();
-      fetchWorkspaces();
-      fetchCurrentConfig();
-    }
-  }, [entityId, systemUser, selectedTenants]);
-
-  const checkAdminStatus = async () => {
+  const checkAdminStatus = useCallback(async () => {
     if (!selectedTenants?.length) return;
 
     try {
@@ -50,9 +42,9 @@ export default function SlackIntegration({
     } catch (error) {
       console.error('Error checking admin status:', error);
     }
-  };
+  }, [getAuthHeader, selectedTenants]);
 
-  const fetchWorkspaces = async () => {
+  const fetchWorkspaces = useCallback(async () => {
     if (!isAdmin && !canConfigure) return;
     if (!selectedTenants?.length) return;
 
@@ -69,9 +61,9 @@ export default function SlackIntegration({
     } catch (error) {
       console.error('Error fetching workspaces:', error);
     }
-  };
+  }, [canConfigure, getAuthHeader, isAdmin, selectedTenants]);
 
-  const fetchCurrentConfig = async () => {
+  const fetchCurrentConfig = useCallback(async () => {
     if (!selectedTenants?.length) return;
 
     try {
@@ -100,7 +92,21 @@ export default function SlackIntegration({
     } catch (error) {
       console.error('Error fetching config:', error);
     }
-  };
+  }, [entityId, entityType, getAuthHeader, selectedTenants]);
+
+  useEffect(() => {
+    if (systemUser && selectedTenants?.length) {
+      checkAdminStatus();
+      fetchWorkspaces();
+      fetchCurrentConfig();
+    }
+  }, [
+    systemUser,
+    selectedTenants,
+    checkAdminStatus,
+    fetchWorkspaces,
+    fetchCurrentConfig,
+  ]);
 
   const fetchChannels = async (workspaceId) => {
     if (!workspaceId) return;

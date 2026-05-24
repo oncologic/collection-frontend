@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DateTime } from "luxon";
 import {
   FaCalendar,
@@ -23,16 +23,17 @@ const CalendarHoverInfo = ({ events, onClose, isSharedView = false }) => {
   const [selectedNotation, setSelectedNotation] = useState(null);
   const [showNotationDetail, setShowNotationDetail] = useState(false);
   const today = DateTime.now().startOf("day");
+  const filterTodayEventsRef = useRef(() => []);
 
   // Get calendar event update functionality
   const { handleUpdateDate } = useCalendarEventUpdates(() => {
     // Refresh today's events after update
-    filterTodayEvents();
+    filterTodayEventsRef.current();
   });
 
   // Effect to filter events on initial load and when events or showNotations change
   useEffect(() => {
-    filterTodayEvents();
+    filterTodayEventsRef.current();
   }, [events, showNotations]);
 
   // Enhanced time parsing function
@@ -269,6 +270,7 @@ const CalendarHoverInfo = ({ events, onClose, isSharedView = false }) => {
     setTodayEvents(sortedEvents);
     return sortedEvents;
   };
+  filterTodayEventsRef.current = filterTodayEvents;
 
   // Mark item as complete
   const markAsComplete = (event, e) => {

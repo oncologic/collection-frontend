@@ -1,6 +1,6 @@
 # Contexlia Frontend
 
-This repository contains the Next.js frontend for Contexlia. The app supports authenticated workspaces, public tenant browsing, resources, events, collections, external links, notations, invitations, payments, tutorials, and administrative tenant management.
+This repository contains the Next.js frontend for Contexlia. The app supports authenticated workspaces, public tenant browsing, resources, events, collections, external links, notations, invitations, tutorials, subscriptions, and administrative tenant management.
 
 ## License
 
@@ -58,7 +58,7 @@ Useful starting points:
 - [Test Setup](./docs/setup/TEST_SETUP.md)
 - [Personal Tenant](./docs/features/personal-tenant/README.md)
 - [Invitation Flow](./docs/features/invitations/README_INVITATION_FLOW.md)
-- [Payments](./docs/features/payments/README.md)
+- [Subscriptions](./docs/features/subscriptions/README.md)
 - [Bulk Import Guide](./docs/guides/BULK_IMPORT_GUIDE.md)
 
 ## Contributing

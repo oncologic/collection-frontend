@@ -142,7 +142,7 @@ const SocialMediaConnector = ({ organization, onUpdate }) => {
     <div className="bg-white rounded-xl p-6 shadow-sm">
       <h2 className="text-xl font-semibold mb-4">Social Media Accounts</h2>
       <p className="text-gray-600 mb-6">
-        Connect your organization&apos;s social media accounts to automatically
+        Connect your business unit&apos;s social media accounts to automatically
         display posts in the social media feed.
       </p>
 

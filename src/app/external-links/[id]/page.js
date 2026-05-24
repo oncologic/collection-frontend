@@ -69,6 +69,7 @@ const ExternalLinkPage = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
   const highlightNotationId = searchParams.get("highlightNotation");
+  const contextCollectionId = searchParams.get("collectionId") || "";
   const {
     isAdmin,
     isAdvocate,
@@ -286,6 +287,7 @@ const ExternalLinkPage = () => {
             pinnedItems={pinnedItems}
             refetchExternalLink={refetchExternalLink}
             highlightNotationId={highlightNotationId}
+            contextCollectionId={contextCollectionId}
             publicJsonEnabled={
               publicSharingStatus?.externalLinks?.[0]?.publicJsonEnabled ||
               false

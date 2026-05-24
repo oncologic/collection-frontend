@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import { useContextAuth } from "../context/authContext";
-import { useCreateStripeSubscription, useChangeSubscriptionPlan } from "../hooks/useSubscription";
+import { useChangeSubscriptionPlan } from "../hooks/useSubscription";
 import toast from "react-hot-toast";
 import { FaSpinner } from "react-icons/fa";
 
@@ -14,17 +14,6 @@ export default function PostSignupPlanHandler() {
   const { systemUser, isLoaded: authLoaded } = useContextAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasProcessed, setHasProcessed] = useState(false);
-
-  const createStripeSubscription = useCreateStripeSubscription({
-    onSuccess: (data) => {
-      toast.success("Subscription created successfully!");
-      router.push("/dashboard");
-    },
-    onError: (error) => {
-      toast.error("Failed to create subscription. Please try again from the pricing page.");
-      router.push("/pricing");
-    },
-  });
 
   const changeSubscriptionPlan = useChangeSubscriptionPlan({
     onSuccess: () => {
@@ -44,7 +33,6 @@ export default function PostSignupPlanHandler() {
     }
 
     const plan = searchParams.get("plan");
-    const tenant = searchParams.get("tenant");
 
     if (!plan) {
       return;
@@ -59,24 +47,18 @@ export default function PostSignupPlanHandler() {
       return;
     }
     
-    // Check if this is likely a new signup based on plan in URL
-    const isFromSignup = searchParams.get("from_signup") === "true" || 
-                        (plan && tenant && !systemUser?.hasOnboarded);
-
     setIsProcessing(true);
     setHasProcessed(true);
 
     // Handle plan assignment based on plan type
     if (plan === "explorer" || plan === "basic") {
-      // Free plan - just update the user's plan
       changeSubscriptionPlan.mutate({ planName: plan });
     } else if (plan === "research" || plan === "enterprise") {
       // Custom plan - redirect to pricing with message
       toast.info("Please contact our sales team for custom plan pricing.");
       router.push("/pricing");
     } else {
-      // Paid plan - create Stripe subscription
-      createStripeSubscription.mutate({ planName: plan });
+      changeSubscriptionPlan.mutate({ planName: plan });
     }
   }, [
     isSignedIn,
@@ -87,7 +69,6 @@ export default function PostSignupPlanHandler() {
     hasProcessed,
     isProcessing,
     router,
-    createStripeSubscription,
     changeSubscriptionPlan,
   ]);
 

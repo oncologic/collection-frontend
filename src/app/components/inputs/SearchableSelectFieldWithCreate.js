@@ -227,7 +227,7 @@ export default function SearchableSelectFieldWithCreate({
                         : "bg-gray-200 text-gray-600 hover:bg-gray-300"
                     }`}
                   >
-                    My Organization
+                    My Business Unit
                   </button>
                   <button
                     type="button"

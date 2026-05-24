@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { FaClock, FaPlus, FaTrash, FaGoogle } from "react-icons/fa";
+import { FaClock, FaPlus, FaTrash } from "react-icons/fa";
 
 const TimeSlotPicker = ({
   date,
@@ -15,6 +15,7 @@ const TimeSlotPicker = ({
   const [dragEnd, setDragEnd] = useState(null);
   const timeGridRef = useRef(null);
   const scrollContainerRef = useRef(null);
+  const handleMouseUpRef = useRef(null);
 
   // Convert time to minutes for easier calculation
   const timeToMinutes = (timeStr) => {
@@ -150,6 +151,7 @@ const TimeSlotPicker = ({
     setDragStart(null);
     setDragEnd(null);
   };
+  handleMouseUpRef.current = handleMouseUp;
 
   // Add a default time slot
   const addDefaultSlot = () => {
@@ -181,14 +183,12 @@ const TimeSlotPicker = ({
 
   useEffect(() => {
     const handleGlobalMouseUp = () => {
-      if (isDragging) {
-        handleMouseUp();
-      }
+      handleMouseUpRef.current?.();
     };
 
     document.addEventListener("mouseup", handleGlobalMouseUp);
     return () => document.removeEventListener("mouseup", handleGlobalMouseUp);
-  }, [isDragging, dragStart, dragEnd]);
+  }, []);
 
   // Auto-scroll to 7 AM on mount
   useEffect(() => {
@@ -212,7 +212,7 @@ const TimeSlotPicker = ({
         </button>
       </div>
 
-      {/* Vertical Time Grid - Google Calendar Style */}
+      {/* Vertical Time Grid */}
       <div
         ref={scrollContainerRef}
         className="relative h-96 overflow-y-auto overflow-x-hidden bg-white rounded-lg border border-gray-200"
@@ -284,27 +284,20 @@ const TimeSlotPicker = ({
               const position = getEventPosition(event);
               if (!position) return null;
 
-              const isGoogleEvent = event.isGoogleCalendarEvent;
-              const bgColor = isGoogleEvent ? "bg-blue-100" : "bg-red-100";
-              const borderColor = isGoogleEvent ? "border-blue-300" : "border-red-300";
-              const textColor = isGoogleEvent ? "text-blue-800" : "text-red-800";
-              const subTextColor = isGoogleEvent ? "text-blue-600" : "text-red-600";
-
               return (
                 <div
                   key={`event-${index}`}
-                  className={`absolute left-0 right-0 mx-2 ${bgColor} border ${borderColor} rounded-md p-1 pointer-events-none z-10 opacity-90`}
+                  className="absolute left-0 right-0 mx-2 bg-red-100 border border-red-300 rounded-md p-1 pointer-events-none z-10 opacity-90"
                   style={{
                     top: `${position.top}px`,
                     height: `${Math.max(position.height, 20)}px`,
                     minHeight: "20px",
                   }}
                 >
-                  <div className={`text-xs font-medium ${textColor} truncate flex items-center gap-1`}>
-                    {isGoogleEvent && <FaGoogle size={10} />}
+                  <div className="text-xs font-medium text-red-800 truncate">
                     {position.title}
                   </div>
-                  <div className={`text-[10px] ${subTextColor}`}>
+                  <div className="text-[10px] text-red-600">
                     {formatTime(position.startTime)}
                     {position.endTime && ` - ${formatTime(position.endTime)}`}
                   </div>

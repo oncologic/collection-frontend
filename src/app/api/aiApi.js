@@ -231,30 +231,6 @@ export const fetchTransactionHistory = async (token) => {
   }
 };
 
-export const addUserCredits = async ({
-  amount,
-  stripeTransactionId,
-  token,
-}) => {
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/credits/add`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ amount, stripeTransactionId }),
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error("Failed to add credits");
-  }
-
-  return response.json();
-};
-
 // Admin Credit Management Functions
 export const fetchUserCreditBalance = async (userId, token) => {
   try {
@@ -310,6 +286,36 @@ export const addCreditsToUser = async ({
   }
 };
 
+export const setUserCreditBalance = async ({
+  userId,
+  amount,
+  description,
+  token,
+}) => {
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/credits/admin/balance/${userId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ amount, description }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to set user credit balance");
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error("Error setting user credit balance:", error);
+    throw error;
+  }
+};
+
 export const searchContent = async ({ searchQuery, timeframe, headers }) => {
   try {
     const response = await fetch(
@@ -358,28 +364,6 @@ export const processImageOCR = async ({ imageUrl, prompt, headers }) => {
     console.error("Error processing image:", error);
     throw error;
   }
-};
-
-export const createPaymentIntent = async ({ packageId, token }) => {
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/credits/create-payment-intent`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        packageId,
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error("Failed to create payment intent");
-  }
-
-  return response.json();
 };
 
 export const previewStructuredNotations = async ({

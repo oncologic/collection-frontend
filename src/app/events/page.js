@@ -229,8 +229,6 @@ const EventsPage = () => {
   const [viewMode, setViewMode] = useState("calendar"); // table, grid, calendar
   const [showUpcoming, setShowUpcoming] = useState(true);
   const [dateFilter, setDateFilter] = useState("all"); // all, upcoming, past
-  const [showGoogleCalendarEvents, setShowGoogleCalendarEvents] =
-    useState(false);
   const [showPublicOnly, setShowPublicOnly] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [eventsToExport, setEventsToExport] = useState([]);
@@ -284,7 +282,7 @@ const EventsPage = () => {
       ? publicPaginatedData
       : authenticatedPaginatedData;
 
-  const events = paginatedData?.data || [];
+  const events = useMemo(() => paginatedData?.data || [], [paginatedData?.data]);
 
   // Fetch all events for table view (no date filtering)
   const publicAllEventsPaginated = useGetPublicEventsPaginated(
@@ -590,11 +588,6 @@ const EventsPage = () => {
       filtered = filtered.filter((event) => event.endDateTime < now);
     }
 
-    // Google Calendar filter (only in table view)
-    if (viewMode === "table" && !showGoogleCalendarEvents) {
-      filtered = filtered.filter((event) => !event.isGoogleCalendarEvent);
-    }
-
     return filtered.sort(
       (a, b) => a.startDateTime.toMillis() - b.startDateTime.toMillis()
     );
@@ -605,8 +598,6 @@ const EventsPage = () => {
     selectedTags,
     selectedStates,
     dateFilter,
-    viewMode,
-    showGoogleCalendarEvents,
   ]);
 
   // Upcoming events for featured section - respects all filters including search
@@ -669,9 +660,6 @@ const EventsPage = () => {
         const d = DateTime.fromISO(e.startDate);
         return d >= startOfMonth && d <= endOfMonth;
       })
-      .filter((e) =>
-        showGoogleCalendarEvents ? true : !e.isGoogleCalendarEvent
-      )
       .sort(
         (a, b) =>
           DateTime.fromISO(a.startDate).toMillis() -
@@ -709,7 +697,7 @@ const EventsPage = () => {
       "Edit as needed before posting.",
     ].join("\n");
     return text;
-  }, [filteredEvents, currentCalendarMonth, showGoogleCalendarEvents]);
+  }, [filteredEvents, currentCalendarMonth]);
 
   const handleOpenSocialPost = useCallback(() => {
     setSocialPostText(buildSocialPost());
@@ -724,7 +712,6 @@ const EventsPage = () => {
     setSelectedTags([]);
     setSelectedStates([]);
     setDateFilter("all");
-    setShowGoogleCalendarEvents(true);
   };
 
   // Clear specific filter types
@@ -1159,8 +1146,7 @@ const EventsPage = () => {
           {(selectedEventTypes.length > 0 ||
             selectedTags.length > 0 ||
             selectedStates.length > 0 ||
-            dateFilter !== "all" ||
-            (viewMode === "table" && !showGoogleCalendarEvents)) && (
+            dateFilter !== "all") && (
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <span className="text-sm text-gray-600 font-medium">
                 Active filters:
@@ -1229,18 +1215,6 @@ const EventsPage = () => {
                   <button
                     onClick={() => setDateFilter("all")}
                     className="ml-1 hover:text-orange-600"
-                  >
-                    <FaTimes className="w-3 h-3" />
-                  </button>
-                </span>
-              )}
-
-              {viewMode === "table" && !showGoogleCalendarEvents && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">
-                  System events only
-                  <button
-                    onClick={() => setShowGoogleCalendarEvents(true)}
-                    className="ml-1 hover:text-gray-600"
                   >
                     <FaTimes className="w-3 h-3" />
                   </button>
@@ -1597,9 +1571,7 @@ const EventsPage = () => {
                             .toISODate(),
                         });
                       }}
-                      showGoogleCalendarEvents={showGoogleCalendarEvents}
                       showPublicOnly={showPublicOnly}
-                      onGoogleCalendarToggle={setShowGoogleCalendarEvents}
                       onPublicOnlyToggle={setShowPublicOnly}
                     />
                   </div>

@@ -76,10 +76,10 @@ export default function AdminOrganizationsPage() {
   //   const { mutate: updateOrganization } = useUpdateOrganization();
   const { mutate: deleteOrganization } = useDeleteOrganization({
     onSuccess: () => {
-      toast.success("Organization deleted successfully");
+      toast.success("Business Unit deleted successfully");
     },
     onError: (error) => {
-      toast.error(`Failed to delete organization: ${error.message}`);
+      toast.error(`Failed to delete business unit: ${error.message}`);
     },
   });
   const { mutate: deleteResource } = useDeleteResource({
@@ -735,14 +735,14 @@ export default function AdminOrganizationsPage() {
           />
         </div>
       </div> */}
-      {/* Organizations Table Section */}
+      {/* Business Units Table Section */}
       <div className="">
-        <h2 className="text-2xl font-bold mb-6">Organizations</h2>
+        <h2 className="text-2xl font-bold mb-6">Business Units</h2>
 
         {/* Single search field */}
         <div className="mb-4">
           <input
-            placeholder="Search all columns in organizations..."
+            placeholder="Search all columns in business units..."
             value={orgGlobalFilter ?? ""}
             onChange={(e) => setOrgGlobalFilter(e.target.value)}
             className="p-2 border rounded w-full max-w-md"

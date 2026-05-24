@@ -28,6 +28,7 @@ import {
   FaCheck,
   FaBuilding,
   FaShareAlt,
+  FaPlus,
 } from "react-icons/fa";
 import TimestampModal from "./TimestampModal";
 import ImageBrowser from "./ImageBrowser/ImageBrowser";
@@ -102,9 +103,86 @@ const animationStyles = `
   }
 `;
 
+const getReferencedItemIdentity = (item, fallbackIndex = 0) => {
+  const type = item?.type || item?.contentType || item?.content_type || "item";
+  const stableId =
+    item?.id ||
+    item?.resourceId ||
+    item?.externalLinkId ||
+    item?.url ||
+    item?.presignedUrl ||
+    item?.name ||
+    item?.title;
+
+  return stableId ? `${type}:${stableId}` : `${type}:index:${fallbackIndex}`;
+};
+
+const dedupeReferencedItems = (items = []) => {
+  const seen = new Set();
+
+  return items.filter((item, index) => {
+    const identity = getReferencedItemIdentity(item, index);
+    if (seen.has(identity)) {
+      return false;
+    }
+
+    seen.add(identity);
+    return true;
+  });
+};
+
+const cleanInlineText = (value) =>
+  typeof value === "string"
+    ? value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
+    : "";
+
+const normalizeReasonTerms = (terms) =>
+  Array.isArray(terms)
+    ? [
+        ...new Set(
+          terms
+            .map((term) => cleanInlineText(String(term || "")))
+            .filter(Boolean)
+        ),
+      ].slice(0, 6)
+    : [];
+
+const getReferencedItemSelectionReason = (item = {}) => {
+  const explicitReason = cleanInlineText(
+    item.selectionReason ||
+      item.selection_reason ||
+      item.reason ||
+      item.rationale ||
+      item.matchReason ||
+      item.match_reason ||
+      ""
+  );
+
+  if (explicitReason) return explicitReason;
+
+  const matchedTerms = normalizeReasonTerms(
+    item.matchedTerms || item.matched_terms
+  );
+  if (matchedTerms.length > 0) {
+    return `Matched request terms: ${matchedTerms.join(", ")}.`;
+  }
+
+  const similarity = Number.parseFloat(item.similarity || item.similarity_score);
+  if (Number.isFinite(similarity) && similarity >= 1) {
+    return "Selected or mentioned by the user for this chat.";
+  }
+
+  if (Number.isFinite(similarity) && similarity > 0) {
+    return "Retrieved as a close semantic match for the question.";
+  }
+
+  return "Included as supporting context for the AI response.";
+};
+
 // PinModal Component
 const PinModal = ({ isOpen, onClose, items, handlePinItems }) => {
   const [selectedItems, setSelectedItems] = useState(new Set());
+  const modalItems = dedupeReferencedItems(items);
 
   const handleToggleItem = (itemId) => {
     setSelectedItems((prev) => {
@@ -120,7 +198,7 @@ const PinModal = ({ isOpen, onClose, items, handlePinItems }) => {
 
   const handlePinSelected = () => {
     // Convert selected IDs back to full items
-    const selectedFullItems = items.filter((item) =>
+    const selectedFullItems = modalItems.filter((item) =>
       selectedItems.has(item.id)
     );
     handlePinItems(selectedFullItems);
@@ -158,9 +236,9 @@ const PinModal = ({ isOpen, onClose, items, handlePinItems }) => {
 
         {/* Scrollable Content */}
         <div className="max-h-[60vh] sm:max-h-[70vh] overflow-y-auto p-4 space-y-2">
-          {items.map((item, index) => (
+          {modalItems.map((item, index) => (
             <div
-              key={item.id}
+              key={getReferencedItemIdentity(item, index)}
               className={`p-3 rounded-xl border transition-all duration-200 animate-fade-in-up
                 ${
                   selectedItems.has(item.id)
@@ -239,6 +317,8 @@ const ReferencedItems = ({
   onCancelPin,
   onUpdateChatContext,
   hideActionButtons = false,
+  onAddToCollectionCart,
+  collectionCartItems = [],
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState(null);
@@ -248,9 +328,6 @@ const ReferencedItems = ({
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [showPinButton, setShowPinButton] = useState(false);
   const [showUseInChatButton, setShowUseInChatButton] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [lastClickTime, setLastClickTime] = useState(0);
-  const [showAttentionIcon, setShowAttentionIcon] = useState(true);
   const [expandedSections, setExpandedSections] = useState({});
   const router = useRouter();
   const attachmentBrowserRef = useRef(null);
@@ -278,22 +355,6 @@ const ReferencedItems = ({
     return () => clearTimeout(timer);
   }, []);
 
-  // Auto-hide the attention icon after 8 seconds
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowAttentionIcon(false);
-    }, 8000); // 8 seconds
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Hide attention icon after first expansion
-  useEffect(() => {
-    if (isExpanded) {
-      setShowAttentionIcon(false);
-    }
-  }, [isExpanded]);
-
   // Scroll to AttachmentBrowser when it opens
   useEffect(() => {
     if (isAttachmentBrowserOpen && attachmentBrowserRef.current) {
@@ -313,7 +374,9 @@ const ReferencedItems = ({
     }));
   };
 
-  if (!items?.length) return null;
+  const referencedItems = dedupeReferencedItems(items);
+
+  if (!referencedItems.length) return null;
 
   const isYoutubeUrl = (url, videoUrl) => {
     // Check both URLs independently
@@ -375,11 +438,12 @@ const ReferencedItems = ({
 
   // Get all video items
   const videoItems =
-    items?.filter((item) => isYoutubeUrl(item.url, item.videoUrl)) || [];
+    referencedItems?.filter((item) => isYoutubeUrl(item.url, item.videoUrl)) ||
+    [];
 
   // Get all image items (only actual images)
   const imageItems =
-    items?.reduce((acc, item) => {
+    referencedItems?.reduce((acc, item) => {
       // Direct presignedUrl items that are images
       if (
         item.presignedUrl &&
@@ -426,7 +490,7 @@ const ReferencedItems = ({
 
   // Get all non-image attachments
   const attachmentItems =
-    items?.reduce((acc, item) => {
+    referencedItems?.reduce((acc, item) => {
       // Direct attachment items that are not images
       if (
         item.type === "attachment" &&
@@ -502,21 +566,21 @@ const ReferencedItems = ({
     videoItems.find((item) => item.highlighted) || videoItems[0];
 
   // Organize items to nest related content
-  const organizedItems = items
+  const organizedItems = referencedItems
     .map((item) => {
       if (item.type === "collection") {
         // Find matching externalLinks for this collection
-        const matchingExternalLinks = items
+        const matchingExternalLinks = referencedItems
           .filter(
             (i) => i.type === "external_link" && i.collectionId === item.id
           )
           .map((link) => ({
             ...link,
             // Find matching attachments and notations for this external link
-            attachments: items.filter(
+            attachments: referencedItems.filter(
               (i) => i.type === "attachment" && i.externalLinkId === link.id
             ),
-            notations: items.filter(
+            notations: referencedItems.filter(
               (i) => i.type === "notation" && i.externalLinkId === link.id
             ),
           }));
@@ -533,19 +597,19 @@ const ReferencedItems = ({
         // Filter out items that are now nested under collections
         !(
           item.type === "external_link" &&
-          items.some(
+          referencedItems.some(
             (i) => i.type === "collection" && i.id === item.collectionId
           )
         ) &&
         !(
           item.type === "attachment" &&
-          items.some(
+          referencedItems.some(
             (i) => i.type === "external_link" && i.id === item.externalLinkId
           )
         ) &&
         !(
           item.type === "notation" &&
-          items.some(
+          referencedItems.some(
             (i) => i.type === "external_link" && i.id === item.externalLinkId
           )
         )
@@ -572,7 +636,7 @@ const ReferencedItems = ({
           window.open(`/events/${item.id}`, "_blank");
           break;
         case "organization":
-          window.open(`/organizations/${item.id}`, "_blank");
+          window.open(`/business-units/${item.id}`, "_blank");
           break;
         case "social_media_account":
           if (item.url) {
@@ -596,7 +660,7 @@ const ReferencedItems = ({
       return;
     }
 
-    // For collections, external_links, and organizations, always go to the internal page
+    // For collections, external links, and business units, always go to the internal page
     if (item.type === "collection") {
       window.open(`/collections/${item.id}`, "_blank");
       return;
@@ -608,7 +672,7 @@ const ReferencedItems = ({
     }
 
     if (item.type === "organization") {
-      window.open(`/organizations/${item.id}`, "_blank");
+      window.open(`/business-units/${item.id}`, "_blank");
       return;
     }
 
@@ -842,7 +906,7 @@ const ReferencedItems = ({
     }
 
     // Format the items to match the expected structure
-    const formattedItems = items.map((item) => ({
+    const formattedItems = referencedItems.map((item) => ({
       ...item,
       type: item.type === "external_link" ? "link" : item.type, // Convert external_link to link type
     }));
@@ -851,8 +915,23 @@ const ReferencedItems = ({
     onUseReferencedItems && onUseReferencedItems(formattedItems);
   };
 
+  const getCollectionCartKey = (item = {}) =>
+    `${item.type === "link" ? "external_link" : item.type || "item"}:${
+      item.id || item.externalLinkId || item.collectionId || item.title || item.name
+    }`;
+
+  const canAddToCollectionCart = (item = {}) =>
+    ["collection", "external_link", "link", "resource"].includes(item.type);
+
+  const isInCollectionCart = (item = {}) => {
+    const key = getCollectionCartKey(item);
+    return collectionCartItems.some(
+      (cartItem) => getCollectionCartKey(cartItem) === key
+    );
+  };
+
   // Group items by type for cleaner display
-  const groupedItems = items.reduce((acc, item) => {
+  const groupedItems = organizedItems.reduce((acc, item) => {
     const type = item.type || "other";
     if (!acc[type]) acc[type] = [];
     acc[type].push(item);
@@ -868,44 +947,18 @@ const ReferencedItems = ({
       >
         <h3 className="text-gray-700 text-sm sm:text-base font-medium flex items-center">
           {/* Simple pulsing gradient circle status indicator */}
-          {true && (
+          <span className="relative mr-1.5">
             <span
-              className="relative mr-1.5 cursor-pointer"
-              onClick={() => setIsExpanded(!isExpanded)}
-            >
-              <span
-                className="inline-block w-3 h-3 rounded-full bg-gradient-to-r from-blue-300 to-blue-500 animate-pulse-subtle"
-                title="Click to view sources"
-              ></span>
-            </span>
-          )}
+              className="inline-block w-3 h-3 rounded-full bg-gradient-to-r from-blue-300 to-blue-500 animate-pulse-subtle"
+              title="Sources used"
+            ></span>
+          </span>
           <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             Sources
           </span>
-
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="ml-2 text-gray-400 hover:text-blue-600 transition-colors duration-200"
-          >
-            <span className="text-xs inline-flex items-center">
-              {isExpanded ? "Hide" : "Show"} ({items.length})
-              <svg
-                className={`ml-1 w-3 h-3 transition-transform duration-300 ${
-                  isExpanded ? "rotate-180" : ""
-                }`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
-            </span>
-          </button>
+          <span className="ml-2 text-xs text-gray-400">
+            ({referencedItems.length})
+          </span>
         </h3>
         <div className="flex flex-wrap items-center gap-2">
           {showUseInChatButton && (
@@ -953,14 +1006,10 @@ const ReferencedItems = ({
         </div>
       </div>
 
-      {/* ChatGPT-like Sources View - Conditional based on expansion state */}
+      {/* ChatGPT-like Sources View */}
       <div
         data-sources-container
-        className={`overflow-hidden transition-all duration-500 ease-in-out ${
-          isExpanded
-            ? "max-h-[700px] overflow-y-auto opacity-100"
-            : "max-h-0 opacity-0"
-        }`}
+        className="max-h-[700px] overflow-y-auto"
       >
         <div className="flex flex-col space-y-3 pl-2 pr-1 py-2">
           {Object.entries(groupedItems).map(([type, typeItems], groupIndex) => {
@@ -1008,18 +1057,22 @@ const ReferencedItems = ({
                         : "overflow-x-auto"
                     }`}
                 >
-                  {visibleItems.map((item, itemIndex) => (
-                    <div
-                      key={item.id}
-                      className={`flex items-center gap-2 group animate-fade-in-up min-w-0 pr-2 ${
-                        item.type === "organization" ? "py-1.5" : "py-0.5"
-                      }`}
-                      style={{
-                        animationDelay: `${groupIndex * 50 + itemIndex * 30}ms`,
-                        animationDuration: "0.4s",
-                      }}
-                    >
-                      {/* Icon with subtle highlight effect - larger container for organization logos */}
+                  {visibleItems.map((item, itemIndex) => {
+                    const selectionReason =
+                      getReferencedItemSelectionReason(item);
+
+                    return (
+                      <div
+                        key={getReferencedItemIdentity(item, itemIndex)}
+                        className={`flex items-start gap-2 group animate-fade-in-up min-w-0 pr-2 ${
+                          item.type === "organization" ? "py-1.5" : "py-1"
+                        }`}
+                        style={{
+                          animationDelay: `${groupIndex * 50 + itemIndex * 30}ms`,
+                          animationDuration: "0.4s",
+                        }}
+                      >
+                      {/* Icon with subtle highlight effect - larger container for business unit logos */}
                       <div
                         className={`flex-shrink-0 ${
                           item.type === "organization" ? "w-8 h-8" : "w-5 h-5"
@@ -1030,7 +1083,7 @@ const ReferencedItems = ({
                             <Image
                               src={item.imageUrl || item.presignedUrl}
                               alt={
-                                item.name || item.title || "Organization logo"
+                                item.name || item.title || "Business Unit logo"
                               }
                               width={32}
                               height={32}
@@ -1118,11 +1171,49 @@ const ReferencedItems = ({
                             </a>
                           )}
                         </div>
+                        {selectionReason && (
+                          <p className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-gray-500">
+                            <FaInfoCircle className="mt-0.5 h-3 w-3 flex-shrink-0 text-blue-400" />
+                            <span className="line-clamp-2">
+                              {selectionReason}
+                            </span>
+                          </p>
+                        )}
                       </div>
 
                       {/* Action buttons - only show if hideActionButtons is false */}
                       {!hideActionButtons && (
-                        <div className="flex items-center gap-1 flex-shrink-0">
+                        <div className="flex flex-shrink-0 items-center gap-1 pt-0.5">
+                          {onAddToCollectionCart &&
+                            canAddToCollectionCart(item) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onAddToCollectionCart(item);
+                                }}
+                                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-all duration-200 ${
+                                  isInCollectionCart(item)
+                                    ? "border border-green-200 bg-green-50 text-green-700"
+                                    : "border border-blue-100 bg-blue-50 text-blue-700 hover:border-blue-200 hover:bg-blue-100"
+                                }`}
+                                title={
+                                  isInCollectionCart(item)
+                                    ? "Already in collection cart"
+                                    : "Add to collection cart"
+                                }
+                              >
+                                {isInCollectionCart(item) ? (
+                                  <FaCheck className="h-3 w-3" />
+                                ) : (
+                                  <FaPlus className="h-3 w-3" />
+                                )}
+                                <span>
+                                  {isInCollectionCart(item) ? "Added" : "Add"}
+                                </span>
+                              </button>
+                            )}
+
                           {/* Single item action - eye icon only for resources that aren't collections or external_links */}
                           {!(
                             item.type === "collection" ||
@@ -1202,8 +1293,9 @@ const ReferencedItems = ({
                           })()}
                         </div>
                       )}
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
 
                   {/* View more button for very long lists */}
                   {!isTypeExpanded && hasMoreItems && (

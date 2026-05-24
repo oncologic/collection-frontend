@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { formatVisibilityForDisplay } from "@/app/utils/visibility";
 import {
   FaChevronDown,
@@ -72,9 +72,9 @@ const CollectionListView = ({
   }, [collections, isAdmin, currentUserId]);
 
   // Helper function to check if user can edit collection
-  const canEditCollection = (collection) => {
+  const canEditCollection = useCallback((collection) => {
     return isAdmin || collection.userId === currentUserId;
-  };
+  }, [isAdmin, currentUserId]);
 
   // Helper function to check if collection has external links with collaborators
   const hasCollaborators = (collection) => {
@@ -252,7 +252,7 @@ const CollectionListView = ({
 
       return parentCollection && canEditCollection(parentCollection);
     });
-  }, [selectedLinks, collections, isAdmin, currentUserId]);
+  }, [selectedLinks, collections, canEditCollection]);
 
   return (
     <div className="w-full">

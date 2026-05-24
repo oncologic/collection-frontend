@@ -75,6 +75,7 @@ import TemplateManager from "@/app/components/TemplateManager";
 import DOMPurify from "dompurify";
 import { useEvents } from "../hooks/useEvents";
 import {
+  formatDateRangeShort,
   formatLongDate,
   getDateRangeValues,
   getTodayDateInputValue,
@@ -145,6 +146,134 @@ const normalizeLinkGroupsByCategory = (value) => {
   }, {});
 };
 
+const getEarliestDate = (dates) =>
+  dates.filter(Boolean).sort((a, b) => a.localeCompare(b))[0] || "";
+
+const getLatestDate = (dates) =>
+  dates.filter(Boolean).sort((a, b) => a.localeCompare(b)).at(-1) || "";
+
+const getCollectionExternalLinkId = (item = {}) =>
+  item.collectionExternalLinkId || item.collection_external_link_id || "";
+
+const getCollectionId = (item = {}) =>
+  item.collectionId || item.collection_id || "";
+
+const getCombinedDateRangeValues = (items = []) => {
+  const ranges = items
+    .map((item) => ({
+      ...getDateRangeValues(item),
+      collectionExternalLinkId: getCollectionExternalLinkId(item),
+      collectionId: getCollectionId(item),
+    }))
+    .filter((range) => range.startDate);
+
+  if (!ranges.length) {
+    return { startDate: "", endDate: "" };
+  }
+
+  const collectionExternalLinkIds = [
+    ...new Set(
+      ranges.map((range) => range.collectionExternalLinkId).filter(Boolean)
+    ),
+  ];
+  const collectionIds = [
+    ...new Set(ranges.map((range) => range.collectionId).filter(Boolean)),
+  ];
+
+  return {
+    startDate: getEarliestDate(ranges.map((range) => range.startDate)),
+    endDate: getLatestDate(
+      ranges.map((range) => range.endDate || range.startDate)
+    ),
+    collectionExternalLinkId:
+      collectionExternalLinkIds.length === 1
+        ? collectionExternalLinkIds[0]
+        : "",
+    collectionId: collectionIds.length === 1 ? collectionIds[0] : "",
+  };
+};
+
+const getExternalLinkDateContext = (
+  externalLink,
+  source = {},
+  preferredCollectionId = ""
+) => {
+  const collections = Array.isArray(externalLink?.collections)
+    ? externalLink.collections
+    : [];
+  const sourceCollectionExternalLinkId = getCollectionExternalLinkId(source);
+  const sourceCollectionId = getCollectionId(source);
+  const matchedCollection =
+    collections.find(
+      (collection) =>
+        collection.collectionExternalLinkId === sourceCollectionExternalLinkId
+    ) ||
+    collections.find((collection) => collection.id === sourceCollectionId) ||
+    collections.find((collection) => collection.id === preferredCollectionId) ||
+    collections[0];
+
+  if (!matchedCollection) {
+    return {
+      collectionId: preferredCollectionId || sourceCollectionId || "",
+      scopedExternalLink: externalLink,
+    };
+  }
+
+  return {
+    collectionId: matchedCollection.id,
+    collectionExternalLinkId: matchedCollection.collectionExternalLinkId,
+    scopedExternalLink: {
+      ...externalLink,
+      date: matchedCollection.date || externalLink.date,
+      startDate:
+        matchedCollection.startDate ||
+        matchedCollection.date ||
+        externalLink.startDate ||
+        externalLink.date,
+      endDate:
+        matchedCollection.endDate ||
+        matchedCollection.startDate ||
+        matchedCollection.date ||
+        externalLink.endDate ||
+        externalLink.startDate ||
+        externalLink.date,
+      status: matchedCollection.status || externalLink.status,
+      eventId: matchedCollection.eventId || externalLink.eventId,
+    },
+  };
+};
+
+const getExternalLinkDateExpansion = (externalLink, notationRange) => {
+  const taskRange = getDateRangeValues(notationRange);
+  if (!taskRange.startDate) return null;
+
+  const linkRange = getDateRangeValues(externalLink);
+  const currentStartDate = linkRange.startDate;
+  const currentEndDate = linkRange.endDate || linkRange.startDate;
+  const taskEndDate = taskRange.endDate || taskRange.startDate;
+  const nextStartDate = getEarliestDate([
+    currentStartDate,
+    taskRange.startDate,
+  ]);
+  const nextEndDate = getLatestDate([currentEndDate, taskEndDate]);
+
+  if (
+    currentStartDate === nextStartDate &&
+    currentEndDate === nextEndDate
+  ) {
+    return null;
+  }
+
+  return {
+    currentStartDate,
+    currentEndDate,
+    taskStartDate: taskRange.startDate,
+    taskEndDate,
+    nextStartDate,
+    nextEndDate,
+  };
+};
+
 const ExternalLinkDetails = ({
   externalLink,
   isAdmin,
@@ -167,6 +296,7 @@ const ExternalLinkDetails = ({
   refetchExternalLink,
   highlightNotationId,
   onShowPublicJsonModal,
+  contextCollectionId = "",
 }) => {
   const { userId } = useContextAuth();
   const queryClient = useQueryClient();
@@ -190,8 +320,6 @@ const ExternalLinkDetails = ({
 
   // State for controlling regular events fetching
   const [showRegularEvents, setShowRegularEvents] = useState(false); // Default to false (opt-in)
-  const [showGoogleCalendarEvents, setShowGoogleCalendarEvents] =
-    useState(false); // Default to false (opt-in)
   const [showPublicOnly, setShowPublicOnly] = useState(false); // Default to false (show all)
 
   // Only fetch events if user opted in to show regular events
@@ -199,15 +327,8 @@ const ExternalLinkDetails = ({
     enabled: showRegularEvents,
   });
 
-  // Separate Google Calendar events from regular organization events
-  const googleCalendarEvents = useMemo(() => {
-    return allEventsData.filter(
-      (event) => event.isGoogleCalendarEvent === true
-    );
-  }, [allEventsData]);
-
   const regularOrganizationEvents = useMemo(() => {
-    return allEventsData.filter((event) => !event.isGoogleCalendarEvent);
+    return allEventsData;
   }, [allEventsData]);
 
   const { mutate: updateAttachment } = useUpdateAttachment();
@@ -216,6 +337,7 @@ const ExternalLinkDetails = ({
   const calendarRef = useRef(null);
   const calendarButtonRef = useRef(null);
   const aiButtonRef = useRef(null);
+  const promptedDateExpansionRef = useRef(new Set());
   const [isInteractingWithCalendarHover, setIsInteractingWithCalendarHover] =
     useState(false);
   const [showAttachmentBrowser, setShowAttachmentBrowser] = useState(false);
@@ -228,6 +350,8 @@ const ExternalLinkDetails = ({
   const [showAddResources, setShowAddResources] = useState(false);
   const [showPubMedResourceSearch, setShowPubMedResourceSearch] =
     useState(false);
+  const [dateExpansionPrompt, setDateExpansionPrompt] = useState(null);
+  const dateExpansionResolveRef = useRef(null);
   const [editingResourceNoteId, setEditingResourceNoteId] = useState(null);
   const [editingResourceNoteValue, setEditingResourceNoteValue] = useState("");
   const [savingResourceNoteId, setSavingResourceNoteId] = useState(null);
@@ -239,8 +363,27 @@ const ExternalLinkDetails = ({
   const [showSlackModal, setShowSlackModal] = useState(false);
   const [activeHeaderTab, setActiveHeaderTab] = useState("details");
 
-  // Get collection ID from the external link
-  const collectionId = externalLink?.collections?.[0]?.id;
+  // Get collection ID from the current collection context when available.
+  const collectionId = useMemo(() => {
+    const collections = Array.isArray(externalLink?.collections)
+      ? externalLink.collections
+      : [];
+    const matchedCollection = collections.find(
+      (collection) => collection.id === contextCollectionId
+    );
+
+    return matchedCollection?.id || collections[0]?.id || contextCollectionId;
+  }, [contextCollectionId, externalLink?.collections]);
+
+  const collectionScopedExternalLink = useMemo(
+    () =>
+      getExternalLinkDateContext(
+        externalLink,
+        { collectionId },
+        collectionId
+      ).scopedExternalLink,
+    [collectionId, externalLink]
+  );
 
   // Resources hooks
   const { data: linkedResourcesData, isLoading: isLoadingResources } =
@@ -446,6 +589,120 @@ const ExternalLinkDetails = ({
     systemUser?.id === externalLink.addedByUserId || // Creator can add content
     systemUser?.id === externalLink.userId || // Legacy check
     isCollaborator; // All collaborators can add content
+
+  const handleMaybeExpandExternalLinkDates = useCallback(
+    async (notationRange) => {
+      const {
+        collectionId: targetCollectionId,
+        scopedExternalLink,
+      } = getExternalLinkDateContext(
+        externalLink,
+        notationRange,
+        collectionId
+      );
+
+      if (!canEdit || !targetCollectionId || !updateExternalLink) {
+        return;
+      }
+
+      const expansion = getExternalLinkDateExpansion(
+        scopedExternalLink,
+        notationRange
+      );
+      if (!expansion) {
+        return;
+      }
+
+      const expansionSignature = `${targetCollectionId}:${expansion.nextStartDate}:${expansion.nextEndDate}`;
+      if (promptedDateExpansionRef.current.has(expansionSignature)) {
+        return;
+      }
+      promptedDateExpansionRef.current.add(expansionSignature);
+
+      const currentRangeText =
+        formatDateRangeShort(
+          expansion.currentStartDate,
+          expansion.currentEndDate
+        ) || "No dates set";
+      const taskRangeText = formatDateRangeShort(
+        expansion.taskStartDate,
+        expansion.taskEndDate
+      );
+      const nextRangeText = formatDateRangeShort(
+        expansion.nextStartDate,
+        expansion.nextEndDate
+      );
+
+      const shouldExpand = await new Promise((resolve) => {
+        dateExpansionResolveRef.current = resolve;
+        setDateExpansionPrompt({
+          currentRangeText,
+          nextRangeText,
+          taskRangeText,
+        });
+      });
+
+      if (!shouldExpand) {
+        return;
+      }
+
+      const linkData = {
+        name: externalLink.name,
+        description: externalLink.description,
+        url: externalLink.url,
+        type: externalLink.type,
+        date: expansion.nextStartDate,
+        startDate: expansion.nextStartDate,
+        endDate: expansion.nextEndDate,
+        status: scopedExternalLink.status,
+        visibility: externalLink.visibility,
+        eventId: scopedExternalLink.eventId,
+        startTime: externalLink.startTime,
+        endTime: externalLink.endTime,
+        timezone: externalLink.timezone,
+        hashtags: externalLink.hashtags,
+        whiteboardData: externalLink.whiteboardData,
+        allowPublicNotations: externalLink.allowPublicNotations,
+      };
+
+      try {
+        await new Promise((resolve, reject) => {
+          updateExternalLink(
+            {
+              collectionId: targetCollectionId,
+              externalLinkId: externalLink.id,
+              linkData,
+            },
+            {
+              onSuccess: resolve,
+              onError: reject,
+            }
+          );
+        });
+
+        toast.success("External link dates expanded");
+        if (refetchExternalLink) {
+          await refetchExternalLink();
+        }
+      } catch (error) {
+        console.error("Failed to expand external link dates:", error);
+        toast.error(error?.message || "Failed to expand external link dates");
+      }
+    },
+    [
+      canEdit,
+      collectionId,
+      externalLink,
+      refetchExternalLink,
+      updateExternalLink,
+    ]
+  );
+
+  const handleDateExpansionPromptClose = (shouldExpand = false) => {
+    dateExpansionResolveRef.current?.(shouldExpand);
+    dateExpansionResolveRef.current = null;
+    setDateExpansionPrompt(null);
+  };
 
   // Determine who owns a particular piece of content (notation, attachment, etc.)
   const isOwner = (contentItem) => {
@@ -711,12 +968,16 @@ const ExternalLinkDetails = ({
       if (isPreparingNotation) {
         return;
       }
+      if (!collectionId) {
+        toast.error("No collection associated with this external link");
+        return;
+      }
 
       setIsPreparingNotation(true);
 
       try {
         const createdNotation = await addNotation.mutateAsync({
-          collectionId: externalLink.collections[0].id,
+          collectionId,
           externalLinkId: externalLink.id,
           notationData: {
             title: seed.title || "Untitled note",
@@ -764,7 +1025,7 @@ const ExternalLinkDetails = ({
     },
     [
       addNotation,
-      externalLink.collections,
+      collectionId,
       externalLink.id,
       isCollaborator,
       isPreparingNotation,
@@ -807,6 +1068,11 @@ const ExternalLinkDetails = ({
       return;
     }
 
+    if (!collectionId) {
+      toast.error("No collection associated with this external link");
+      return;
+    }
+
     try {
       const linkData = {
         name: data.name || externalLink.name,
@@ -817,21 +1083,21 @@ const ExternalLinkDetails = ({
         startDate:
           data.startDate ||
           data.start_date ||
-          externalLink.startDate ||
-          externalLink.date ||
+          collectionScopedExternalLink.startDate ||
+          collectionScopedExternalLink.date ||
           null,
         endDate:
           data.endDate ||
           data.end_date ||
           data.startDate ||
           data.date ||
-          externalLink.endDate ||
-          externalLink.startDate ||
-          externalLink.date ||
+          collectionScopedExternalLink.endDate ||
+          collectionScopedExternalLink.startDate ||
+          collectionScopedExternalLink.date ||
           null,
         status: data.status.id ? data.status.id : data.status,
         visibility: data.visibility.id || data.visibility,
-        eventId: data?.eventId?.id || externalLink.eventId,
+        eventId: data?.eventId?.id || collectionScopedExternalLink.eventId,
         startTime: data?.startTime || externalLink.startTime,
         endTime: data?.endTime || externalLink.endTime,
         timezone: data?.timezone?.id || data?.timezone || externalLink.timezone,
@@ -848,7 +1114,7 @@ const ExternalLinkDetails = ({
 
       // Call the mutation with the updated data (as JSON)
       updateExternalLink({
-        collectionId: externalLink.collections[0].id,
+        collectionId,
         externalLinkId: externalLink.id,
         linkData,
       });
@@ -878,7 +1144,7 @@ const ExternalLinkDetails = ({
     }
 
     // Check if we have a collection to update
-    if (!externalLink.collections || !externalLink.collections[0]) {
+    if (!collectionId) {
       throw new Error("No collection associated with this external link");
     }
 
@@ -889,13 +1155,19 @@ const ExternalLinkDetails = ({
         description: externalLink.description,
         url: externalLink.url,
         type: externalLink.type,
-        date: externalLink.startDate || externalLink.date,
-        startDate: externalLink.startDate || externalLink.date,
+        date:
+          collectionScopedExternalLink.startDate ||
+          collectionScopedExternalLink.date,
+        startDate:
+          collectionScopedExternalLink.startDate ||
+          collectionScopedExternalLink.date,
         endDate:
-          externalLink.endDate || externalLink.startDate || externalLink.date,
-        status: externalLink.status,
+          collectionScopedExternalLink.endDate ||
+          collectionScopedExternalLink.startDate ||
+          collectionScopedExternalLink.date,
+        status: collectionScopedExternalLink.status,
         visibility: externalLink.visibility,
-        eventId: externalLink.eventId,
+        eventId: collectionScopedExternalLink.eventId,
         startTime: externalLink.startTime,
         endTime: externalLink.endTime,
         timezone: externalLink.timezone,
@@ -909,7 +1181,7 @@ const ExternalLinkDetails = ({
       return new Promise((resolve, reject) => {
         updateExternalLink(
           {
-            collectionId: externalLink.collections[0].id,
+            collectionId,
             externalLinkId: externalLinkId,
             linkData: linkData,
           },
@@ -1138,7 +1410,7 @@ const ExternalLinkDetails = ({
       // If user doesn't have collection access (i.e., they're only a collaborator on this external link),
       // navigate to the main collections page instead of the specific collection
       const targetUrl = hasCollectionAccess
-        ? `/collections/${externalLink.collections[0].id}`
+        ? `/collections/${collectionId}`
         : "/collections";
 
       if (router) {
@@ -1221,7 +1493,7 @@ const ExternalLinkDetails = ({
       try {
         await deleteNotation({
           notationId,
-          collectionId: externalLink.collections[0].id,
+          collectionId: notation?.collectionId || collectionId,
         });
       } catch (error) {
         console.error("Error deleting notation:", error);
@@ -1422,6 +1694,7 @@ const ExternalLinkDetails = ({
     try {
       // Collect all update promises
       const updatePromises = [];
+      const updatedNotationRanges = [];
 
       for (const notation of filteredNotations) {
         if (selectedNotations[notation.id]) {
@@ -1433,6 +1706,8 @@ const ExternalLinkDetails = ({
             null;
           const updateData = {
             status: bulkNotationStatus || notation.status,
+            collectionExternalLinkId: notation.collectionExternalLinkId,
+            collectionId: notation.collectionId,
             date: nextStartDate,
             startDate: nextStartDate,
             endDate:
@@ -1463,16 +1738,28 @@ const ExternalLinkDetails = ({
 
           // Add update promise to array instead of awaiting immediately
           updatePromises.push(
-            updateNotation({
-              notationId: notation.id,
-              notationData: updateData,
+            new Promise((resolve, reject) => {
+              updateNotation(
+                {
+                  notationId: notation.id,
+                  notationData: updateData,
+                },
+                {
+                  onSuccess: resolve,
+                  onError: reject,
+                }
+              );
             })
           );
+          updatedNotationRanges.push(updateData);
         }
       }
 
       // Wait for all updates to complete
       await Promise.all(updatePromises);
+      await handleMaybeExpandExternalLinkDates(
+        getCombinedDateRangeValues(updatedNotationRanges)
+      );
 
       // Clear bulk editing state
       setSelectedNotations({});
@@ -1562,6 +1849,9 @@ const ExternalLinkDetails = ({
     setShowAIBulkUpdates(false);
     setSelectedNotations({});
     setIsBulkNotationMode(false);
+    await handleMaybeExpandExternalLinkDates(
+      getCombinedDateRangeValues(updatedNotations || [])
+    );
 
     // Invalidate the external link query to refetch the data
     await queryClient.invalidateQueries({
@@ -1808,6 +2098,88 @@ const ExternalLinkDetails = ({
 
   return (
     <>
+      {dateExpansionPrompt && (
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/45 px-4 py-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="date-expansion-title"
+        >
+          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
+                  <FaCalendarAlt className="h-4 w-4" />
+                </span>
+                <div>
+                  <h2
+                    id="date-expansion-title"
+                    className="text-base font-semibold text-slate-900"
+                  >
+                    Expand external link dates?
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    This task falls outside the current external link schedule.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleDateExpansionPromptClose(false)}
+                className="rounded-md p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                aria-label="Close date expansion prompt"
+              >
+                <FaTimes className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 px-5 py-4 text-sm">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Current external link dates
+                </div>
+                <div className="mt-1 font-semibold text-slate-900">
+                  {dateExpansionPrompt.currentRangeText}
+                </div>
+              </div>
+              <div className="rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2.5">
+                <div className="text-xs font-medium uppercase tracking-wide text-blue-600">
+                  Task dates
+                </div>
+                <div className="mt-1 font-semibold text-blue-900">
+                  {dateExpansionPrompt.taskRangeText}
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Proposed external link dates
+                </div>
+                <div className="mt-1 font-semibold text-slate-900">
+                  {dateExpansionPrompt.nextRangeText}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-100 px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => handleDateExpansionPromptClose(false)}
+                className="inline-flex justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Save task only
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDateExpansionPromptClose(true)}
+                className="inline-flex justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Expand date range
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="min-h-screen bg-gray-50">
         {/* Enterprise Header */}
         <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
@@ -2454,12 +2826,17 @@ const ExternalLinkDetails = ({
                   {/* Bulk Import Modal */}
                   {showBulkImport &&
                     canAddContent &&
-                    externalLink?.collections?.[0]?.id && (
+                    collectionId && (
                       <div className="mb-4 relative z-10">
                         <BulkNotationImport
-                          collectionId={externalLink.collections[0].id}
+                          collectionId={collectionId}
                           externalLinkId={externalLink.id}
-                          onComplete={() => {
+                          onComplete={async (result) => {
+                            await handleMaybeExpandExternalLinkDates(
+                              getCombinedDateRangeValues(
+                                result?.successfulItems || []
+                              )
+                            );
                             // Refresh notations after import
                             if (refetchExternalLink) {
                               refetchExternalLink();
@@ -3046,6 +3423,7 @@ const ExternalLinkDetails = ({
                         externalLinkId={externalLink.id}
                         isCollaborator={isCollaborator && userRole !== "admin"}
                         isNewDraft={Boolean(editingNotation.isNewDraft)}
+                        onNotationSaved={handleMaybeExpandExternalLinkDates}
                         onClose={async () => {
                           setEditingNotation(null);
                           if (refetchExternalLink) {
@@ -3727,8 +4105,8 @@ const ExternalLinkDetails = ({
             onUpdateSingleField={handleUpdateSingleField}
             onClose={() => setIsEditing(false)}
             initialValues={{
-              ...externalLink,
-              status: externalLink.status,
+              ...collectionScopedExternalLink,
+              status: collectionScopedExternalLink.status,
               visibility: externalLink.visibility,
               allowPublicNotations: externalLink.allowPublicNotations || false,
             }}
@@ -4025,8 +4403,7 @@ const ExternalLinkDetails = ({
 
             {/* Show a message if no events and regular events not enabled */}
             {(!combinedEvents || combinedEvents.length === 0) &&
-              !showRegularEvents &&
-              googleCalendarEvents.length === 0 && (
+              !showRegularEvents && (
                 <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
                   <p className="text-gray-500">
                     No events with dates found for this external link.
@@ -4042,7 +4419,6 @@ const ExternalLinkDetails = ({
               events={[
                 ...(combinedEvents || []),
                 ...(showRegularEvents ? regularOrganizationEvents : []),
-                ...googleCalendarEvents,
               ].map((event) => ({
                 ...event,
                 id: event.id || Math.random().toString(),
@@ -4069,11 +4445,9 @@ const ExternalLinkDetails = ({
               }))}
               isAdmin={isAdmin}
               organizations={[]}
-              showGoogleCalendarEvents={showGoogleCalendarEvents}
               showPublicOnly={showPublicOnly}
               showRegularEvents={showRegularEvents}
               isCollectionContext={true}
-              onGoogleCalendarToggle={setShowGoogleCalendarEvents}
               onPublicOnlyToggle={setShowPublicOnly}
               onRegularEventsToggle={setShowRegularEvents}
               onExternalLinkClick={(id) => {
@@ -4081,7 +4455,10 @@ const ExternalLinkDetails = ({
                   // Refresh the current page
                   window.location.reload();
                 } else {
-                  router?.push(`/external-links/${id}`);
+                  const collectionQuery = collectionId
+                    ? `?collectionId=${encodeURIComponent(collectionId)}`
+                    : "";
+                  router?.push(`/external-links/${id}${collectionQuery}`);
                 }
               }}
             />
@@ -4119,6 +4496,9 @@ const ExternalLinkDetails = ({
             collectionId={externalLink?.collections?.[0]?.id}
             onNotationsCreated={async (createdNotations) => {
               setShowAIVoiceMemo(false);
+              await handleMaybeExpandExternalLinkDates(
+                getCombinedDateRangeValues(createdNotations || [])
+              );
 
               // Invalidate the external link query to refetch the data
               await queryClient.invalidateQueries({

@@ -16,6 +16,11 @@ import { useCreateTag, useCreateResourceType } from "@/app/hooks/useMetadata";
 import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
+const normalizeSelectId = (value) => {
+  const id = value?.id ?? value;
+  return id === "" || id === undefined || id === null ? null : id;
+};
+
 export const defaultResourceValues = {
   typeId: "",
   url: "",
@@ -276,7 +281,7 @@ export default function AddResourceForm({
 
   const handleQuickCreateOrganization = async () => {
     if (!newOrgName.trim()) {
-      toast.error("Organization name is required");
+      toast.error("Business unit name is required");
       return;
     }
 
@@ -312,10 +317,10 @@ export default function AddResourceForm({
       setNewOrgWebsite("");
       setShowQuickCreateOrg(false);
       
-      toast.success("Organization created and added to resource");
+      toast.success("Business unit created and added to resource");
     } catch (error) {
       console.error("Error creating organization:", error);
-      toast.error(error.message || "Failed to create organization");
+      toast.error(error.message || "Failed to create business unit");
     }
   };
 
@@ -351,7 +356,7 @@ export default function AddResourceForm({
             data.sensitivityLevelId?.id || data.sensitivityLevelId || null,
           expertiseLevelId:
             data.expertiseLevelId?.id || data.expertiseLevelId || null,
-          targetAudienceId: 1,
+          targetAudienceId: normalizeSelectId(data.targetAudienceId),
           tenantId: selectedTenant?.id || null,
           timestamps: data.timestamps || "",
           fullText: data.fullText || "",
@@ -373,7 +378,7 @@ export default function AddResourceForm({
           expertiseLevelId:
             data.expertiseLevelId?.id || data.expertiseLevelId || null,
           typeId: data.typeId?.id || data.typeId || null,
-          targetAudienceId: 1,
+          targetAudienceId: normalizeSelectId(data.targetAudienceId),
           organizations: data.organizations || [],
           tenantId: selectedTenant?.id || null,
         };
@@ -683,11 +688,11 @@ export default function AddResourceForm({
               )}
             </div>
 
-            {/* Organizations Selection */}
+            {/* Business Units Selection */}
             <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-lg font-semibold text-gray-700">
-                  Organizations{" "}
+                  Business Units{" "}
                   <span className="text-sm font-normal text-gray-500">
                     (optional)
                   </span>
@@ -719,9 +724,9 @@ export default function AddResourceForm({
               <MultiSelect
                 id="organizations"
                 name="organizations"
-                label="Organizations"
+                label="Business Units"
                 required={false}
-                placeholder="Select organizations (optional)"
+                placeholder="Select business units (optional)"
                 options={organizations}
                 value={selectedOrganizations}
                 onChange={handleOrganizationsChange}
@@ -730,7 +735,7 @@ export default function AddResourceForm({
                 <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-sm font-semibold text-gray-700">
-                      Create New Organization
+                      Create New Business Unit
                     </h4>
                     <button
                       type="button"
@@ -760,14 +765,14 @@ export default function AddResourceForm({
                   <div className="space-y-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Organization Name <span className="text-red-500">*</span>
+                        Business Unit Name <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         value={newOrgName}
                         onChange={(e) => setNewOrgName(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter organization name"
+                        placeholder="Enter business unit name"
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();

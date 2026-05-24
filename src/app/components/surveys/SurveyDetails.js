@@ -116,7 +116,7 @@ export const SurveyDetail = ({ survey, onClose, isAdmin = false }) => {
                 </p>
                 <div className="flex flex-col gap-2">
                   <p>
-                    <span className="font-semibold">Organizations:</span>{" "}
+                    <span className="font-semibold">Business Units:</span>{" "}
                     {survey.organizations?.map((org) => org.name).join(", ")}
                   </p>
                   <p className="capitalize">

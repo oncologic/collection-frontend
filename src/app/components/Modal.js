@@ -31,7 +31,7 @@ const Modal = ({
         {/* Container to center the panel */}
         <div className="flex min-h-full items-center justify-center p-2 sm:p-4">
           <DialogPanel
-            className={`${customClass || maxWidth} w-full transform rounded-lg bg-white shadow-xl transition-all ${className}`}
+            className={`${customClass || maxWidth} relative w-full transform rounded-lg bg-white shadow-xl transition-all ${className}`}
           >
             {showCloseButton && (
               <button

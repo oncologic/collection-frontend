@@ -872,17 +872,17 @@ export default function AddEventForm({
               {/* Time Zone */}
             </div>
 
-            {/* Organizations Selection */}
+            {/* Business Units Selection */}
             <div className="flex flex-col space-y-2">
               <label className="text-base sm:text-lg font-semibold text-gray-700">
-                Organizations
+                Business Units
               </label>
               <MultiSelect
                 id="organizations"
                 name="organizations"
-                label="Organizations"
+                label="Business Units"
                 required={true}
-                placeholder="Select organizations"
+                placeholder="Select business units"
                 options={organizations}
                 value={selectedOrganizations}
                 onChange={handleOrganizationsChange}

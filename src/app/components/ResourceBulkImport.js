@@ -953,7 +953,7 @@ const ResourceBulkImport = ({
     const targetAudience = findTargetAudienceByName(row.targetAudience);
     const targetAudienceId = targetAudience
       ? targetAudience.id
-      : targetAudiences[0]?.id || 1;
+      : targetAudiences[0]?.id || null;
 
     // Build description from available fields
     let description = row.description || "";

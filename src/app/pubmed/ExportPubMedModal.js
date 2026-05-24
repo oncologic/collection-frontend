@@ -19,6 +19,7 @@ const ExportPubMedModal = ({ isOpen, onClose, selectedPublications = [] }) => {
   const [showLLMDropdown, setShowLLMDropdown] = useState(false);
   const llmDropdownRef = useRef(null);
   const buttonRef = useRef(null);
+  const generatePromptContentRef = useRef(null);
   const [exportOptions, setExportOptions] = useState({
     includeBasicInfo: true,
     includeAuthors: true,
@@ -32,7 +33,7 @@ const ExportPubMedModal = ({ isOpen, onClose, selectedPublications = [] }) => {
 
   useEffect(() => {
     if (isOpen && selectedPublications.length > 0) {
-      generatePromptContent();
+      generatePromptContentRef.current?.();
     }
   }, [isOpen, selectedPublications, exportOptions]);
 
@@ -145,6 +146,7 @@ const ExportPubMedModal = ({ isOpen, onClose, selectedPublications = [] }) => {
 
     setPromptContent(prompt);
   };
+  generatePromptContentRef.current = generatePromptContent;
 
   const handleCopy = () => {
     navigator.clipboard

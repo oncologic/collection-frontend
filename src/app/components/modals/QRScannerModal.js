@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Modal from "../Modal";
 
 const QRScannerModal = ({ isOpen, onClose, onScan }) => {
@@ -9,20 +9,23 @@ const QRScannerModal = ({ isOpen, onClose, onScan }) => {
   const scannerRef = useRef(null);
   const html5QrCodeRef = useRef(null);
 
-  useEffect(() => {
-    if (!isOpen) {
-      stopScanning();
-      return;
+  const stopScanning = useCallback(async () => {
+    if (html5QrCodeRef.current) {
+      try {
+        const isScanning = html5QrCodeRef.current.getState() === 2; // SCANNING state
+        if (isScanning) {
+          await html5QrCodeRef.current.stop();
+        }
+        html5QrCodeRef.current.clear();
+        html5QrCodeRef.current = null;
+      } catch (err) {
+        console.error("Error stopping scanner:", err);
+      }
     }
+    setScanning(false);
+  }, []);
 
-    startScanning();
-
-    return () => {
-      stopScanning();
-    };
-  }, [isOpen]);
-
-  const startScanning = async () => {
+  const startScanning = useCallback(async () => {
     try {
       const { Html5Qrcode } = await import('html5-qrcode');
 
@@ -58,23 +61,20 @@ const QRScannerModal = ({ isOpen, onClose, onScan }) => {
       setError("Unable to access camera. Please check permissions.");
       setScanning(false);
     }
-  };
+  }, [onScan, stopScanning]);
 
-  const stopScanning = async () => {
-    if (html5QrCodeRef.current) {
-      try {
-        const isScanning = html5QrCodeRef.current.getState() === 2; // SCANNING state
-        if (isScanning) {
-          await html5QrCodeRef.current.stop();
-        }
-        html5QrCodeRef.current.clear();
-        html5QrCodeRef.current = null;
-      } catch (err) {
-        console.error("Error stopping scanner:", err);
-      }
+  useEffect(() => {
+    if (!isOpen) {
+      stopScanning();
+      return;
     }
-    setScanning(false);
-  };
+
+    startScanning();
+
+    return () => {
+      stopScanning();
+    };
+  }, [isOpen, startScanning, stopScanning]);
 
   const handleClose = async () => {
     await stopScanning();

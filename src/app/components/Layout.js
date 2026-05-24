@@ -21,7 +21,7 @@ import { usePublicAuth } from "../hooks/usePublicAuth";
 import { usePublicTenants } from "../hooks/usePublicTenants";
 
 const options = [
-  "All Organizations",
+  "All Business Units",
   "Chromophobe and Oncocytic Tumor Alliance - COA",
   "Kidney Cancer Association - KCA",
   "KidneyCAN",

@@ -3,9 +3,8 @@ import { DateTime } from "luxon";
 import { STATUS_OPTIONS } from "../forms/AddCollectionForm";
 import Image from "next/image";
 import DOMPurify from "dompurify";
-import { FaClock, FaMapMarker, FaList, FaCalendar, FaGoogle } from "react-icons/fa";
+import { FaClock, FaMapMarker, FaList, FaCalendar } from "react-icons/fa";
 import CalendarView, { hasTimeInfo, formatTimeDisplay } from "./CalendarView";
-import { useGoogleCalendar } from "../../hooks/useGoogleCalendar";
 
 // Helper function to strip HTML tags
 const stripHtml = (html) => {
@@ -24,27 +23,17 @@ export default function DayView({
   onEventClick,
   currentDate,
   onDateChange,
-  showGoogleCalendarEvents = false, // Changed default to false (opt-in)
   showPublicOnly = false,
 }) {
   const [dayEvents, setDayEvents] = useState([]);
   const [viewMode, setViewMode] = useState("cards"); // 'cards' or 'calendar'
-  const [localShowGoogleCalendar, setLocalShowGoogleCalendar] = useState(showGoogleCalendarEvents);
   const [localShowPublicOnly, setLocalShowPublicOnly] = useState(showPublicOnly);
-
-  // Google Calendar integration
-  const { integrationStatus } = useGoogleCalendar();
 
   useEffect(() => {
     // Filter events for the selected day
     const formattedDate = currentDate.toFormat("yyyy-MM-dd");
 
     const filteredEvents = events.filter((event) => {
-      // Filter out Google Calendar events if toggle is off
-      if (!localShowGoogleCalendar && event.isGoogleCalendarEvent) {
-        return false;
-      }
-      
       // Filter out non-public events if public-only mode is on
       if (localShowPublicOnly && event.visibility !== 'public') {
         return false;
@@ -140,13 +129,9 @@ export default function DayView({
     });
 
     setDayEvents(sortedEvents);
-  }, [events, currentDate, localShowGoogleCalendar, localShowPublicOnly]);
+  }, [events, currentDate, localShowPublicOnly]);
 
   // Update local filter states when props change
-  useEffect(() => {
-    setLocalShowGoogleCalendar(showGoogleCalendarEvents);
-  }, [showGoogleCalendarEvents]);
-
   useEffect(() => {
     setLocalShowPublicOnly(showPublicOnly);
   }, [showPublicOnly]);
@@ -171,26 +156,8 @@ export default function DayView({
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 flex-shrink-0 gap-3">
         <h2 className="text-xl font-bold">{formatDate(currentDate)}</h2>
         <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center w-full sm:w-auto">
-          {/* Filter controls */}
+         {/* Filter controls */}
           <div className="flex flex-wrap items-center gap-3 mr-4">
-            {/* Google Calendar controls */}
-            {integrationStatus?.connected && (
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={localShowGoogleCalendar}
-                    onChange={(e) => setLocalShowGoogleCalendar(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-600 flex items-center gap-1">
-                    <FaGoogle className="text-blue-500" />
-                    Google Calendar
-                  </span>
-                </label>
-              </div>
-            )}
-            
             {/* Public events only toggle */}
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -273,12 +240,6 @@ export default function DayView({
                         className="p-4 hover:bg-gray-50 cursor-pointer border-l-4 border-transparent hover:border-blue-400 transition-colors relative"
                         onClick={() => onEventClick(event)}
                       >
-                        {/* Google Calendar indicator */}
-                        {event.isGoogleCalendarEvent && (
-                          <div className="absolute top-2 right-2">
-                            <FaGoogle size={12} className="text-blue-500" />
-                          </div>
-                        )}
                         <div className="flex items-start">
                           <div
                             className={`w-2 h-2 rounded-full ${statusColor} mt-1.5 mr-2 flex-shrink-0`}
@@ -347,12 +308,6 @@ export default function DayView({
                         className="p-4 hover:bg-gray-50 cursor-pointer border-l-4 border-transparent hover:border-blue-400 transition-colors relative"
                         onClick={() => onEventClick(event)}
                       >
-                        {/* Google Calendar indicator */}
-                        {event.isGoogleCalendarEvent && (
-                          <div className="absolute top-2 right-2">
-                            <FaGoogle size={12} className="text-blue-500" />
-                          </div>
-                        )}
                         <div className="flex items-start">
                           <div
                             className={`w-2 h-2 rounded-full ${statusColor} mt-1.5 mr-2 flex-shrink-0`}

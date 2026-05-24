@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { tenantService } from "../../services/tenantService";
 import { useAuth } from "@clerk/nextjs";
 import { useContextAuth } from "../../context/authContext";
@@ -25,20 +25,7 @@ const TenantSelectionModal = ({ isOpen, onClose, onTenantSelected }) => {
   const [showQRScanner, setShowQRScanner] = useState(false);
   const acceptInviteMutation = useAcceptTenantInvite();
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchTenants();
-      // Set user's current tenants and pre-select them
-      if (systemUser?.tenants) {
-        setUserCurrentTenants(systemUser.tenants);
-        // Pre-select current tenants
-        const currentIds = new Set(systemUser.tenants.map((t) => t.id));
-        setSelectedTenantIds(currentIds);
-      }
-    }
-  }, [isOpen, systemUser]);
-
-  const fetchTenants = async () => {
+  const fetchTenants = useCallback(async () => {
     try {
       setFetching(true);
       const token = await getToken();
@@ -50,7 +37,20 @@ const TenantSelectionModal = ({ isOpen, onClose, onTenantSelected }) => {
     } finally {
       setFetching(false);
     }
-  };
+  }, [getToken]);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchTenants();
+      // Set user's current tenants and pre-select them
+      if (systemUser?.tenants) {
+        setUserCurrentTenants(systemUser.tenants);
+        // Pre-select current tenants
+        const currentIds = new Set(systemUser.tenants.map((t) => t.id));
+        setSelectedTenantIds(currentIds);
+      }
+    }
+  }, [fetchTenants, isOpen, systemUser]);
 
   const handleJoinTenants = async () => {
     if (selectedTenantIds.size === 0) {
@@ -421,7 +421,7 @@ const TenantSelectionModal = ({ isOpen, onClose, onTenantSelected }) => {
                 />
               </svg>
               <p className="mt-4 text-gray-500">
-                No organizations are currently available.
+                No business units are currently available.
               </p>
             </div>
           ) : (

@@ -409,7 +409,7 @@ export async function fetchOrganizations(headers) {
 
   try {
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/organizations`,
+      `${process.env.NEXT_PUBLIC_API_URL}/api/business-units`,
       {
         headers,
       }
@@ -422,10 +422,12 @@ export async function fetchOrganizations(headers) {
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error("Error fetching organizations:", error);
+    console.error("Error fetching business units:", error);
     throw error;
   }
 }
+
+export const fetchBusinessUnits = fetchOrganizations;
 
 export async function fetchOrganization(id, headers) {
   if (useMocks) {
@@ -438,7 +440,7 @@ export async function fetchOrganization(id, headers) {
 
   try {
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/organizations/${id}`,
+      `${process.env.NEXT_PUBLIC_API_URL}/api/business-units/${id}`,
       {
         headers,
       }
@@ -446,7 +448,7 @@ export async function fetchOrganization(id, headers) {
 
     if (!response.ok) {
       // Create an error object with the response status
-      const error = new Error("Failed to fetch organization");
+      const error = new Error("Failed to fetch business unit");
       error.status = response.status;
       error.response = {
         status: response.status,
@@ -469,6 +471,8 @@ export async function fetchOrganization(id, headers) {
     throw networkError;
   }
 }
+
+export const fetchBusinessUnit = fetchOrganization;
 
 export async function fetchTags(headers) {
   if (useMocks) {
@@ -579,7 +583,7 @@ export async function updateOrganization({ formData, id, headers }) {
   const { "Content-Type": _contentType, ...requestHeaders } = headers || {};
 
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/organizations/${id}`,
+    `${process.env.NEXT_PUBLIC_API_URL}/api/business-units/${id}`,
     {
       method: "PUT",
       body: formData,
@@ -595,9 +599,11 @@ export async function updateOrganization({ formData, id, headers }) {
   return data;
 }
 
+export const updateBusinessUnit = updateOrganization;
+
 export async function deleteOrganization({ id, headers }) {
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/organizations/${id}`,
+    `${process.env.NEXT_PUBLIC_API_URL}/api/business-units/${id}`,
     {
       method: "DELETE",
       headers,
@@ -624,6 +630,8 @@ export async function deleteOrganization({ id, headers }) {
 
   return data;
 }
+
+export const deleteBusinessUnit = deleteOrganization;
 
 export async function updateUserProfile(userData, token) {
   try {

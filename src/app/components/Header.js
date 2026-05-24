@@ -73,7 +73,7 @@ const HeaderContent = ({ setIsCollapsed, isCollapsed }) => {
 
   const navigationItems = [
     { href: "/dashboard", label: "Dashboard", admin: false },
-    { href: "/organizations", label: "Organizations", admin: false },
+    { href: "/business-units", label: "Business Units", admin: false },
     { href: "/resources", label: "Resources", admin: false },
     { href: "/events", label: "Events", admin: false },
     { href: "/opportunities", label: "Opportunities", admin: false },

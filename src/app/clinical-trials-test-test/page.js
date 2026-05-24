@@ -22,7 +22,7 @@ const ClinicalTrialsPage = () => {
   const [viewMode, setViewMode] = useState("all");
 
   // Mocked data
-  const fetchedTrials = {
+  const fetchedTrials = useMemo(() => ({
     StudyFieldsResponse: {
       DataVersion: "2024-12-01",
       DataUpdatedOn: "December 1, 2024",
@@ -80,12 +80,12 @@ const ClinicalTrialsPage = () => {
         },
       ],
     },
-  };
+  }), []);
 
   useEffect(() => {
     setTrials(fetchedTrials.StudyFieldsResponse.StudyFields);
     setIsLoading(false);
-  }, []);
+  }, [fetchedTrials.StudyFieldsResponse.StudyFields]);
 
   const filteredAndSortedTrials = useMemo(() => {
     let filtered = trials;
@@ -150,6 +150,7 @@ const ClinicalTrialsPage = () => {
     sortField,
     sortOrder,
     dismissedTrials,
+    savedTrials,
     viewMode,
   ]);
 

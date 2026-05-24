@@ -549,7 +549,7 @@ const ResourceDuplicateCleanupModal = ({
                                     ],
                                     ["Ratings", resource.counts.ratingCount],
                                     [
-                                      "Organizations",
+                                      "Business Units",
                                       resource.counts.organizationCount,
                                     ],
                                   ].map(([label, value]) => (
@@ -570,7 +570,7 @@ const ResourceDuplicateCleanupModal = ({
                                         {organizationNames.join(", ")}
                                       </>
                                     ) : (
-                                      "No organizations linked"
+                                      "No business units linked"
                                     )}
                                   </span>
                                   {createdLabel && (
@@ -615,7 +615,7 @@ const ResourceDuplicateCleanupModal = ({
         title="Delete Selected Duplicate Resources"
         message={`Delete ${selectedDuplicateResourceIds.size} selected duplicate resource${
           selectedDuplicateResourceIds.size === 1 ? "" : "s"
-        }? This removes the resource and its linked collection, external link, rating, tag, and organization associations.`}
+        }? This removes the resource and its linked collection, external link, rating, tag, and business unit associations.`}
         confirmLabel={
           deletingDuplicateResources ? "Deleting..." : "Delete Selected"
         }

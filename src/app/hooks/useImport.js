@@ -70,10 +70,10 @@ export const useImport = () => {
       let message = 'Import completed:\n';
       
       if (summary.organizationsCreated > 0) {
-        message += `✓ ${summary.organizationsCreated} new organization${summary.organizationsCreated !== 1 ? 's' : ''} created\n`;
+        message += `✓ ${summary.organizationsCreated} new business unit${summary.organizationsCreated !== 1 ? 's' : ''} created\n`;
       }
       if (summary.organizationsSkipped > 0) {
-        message += `↻ ${summary.organizationsSkipped} organization${summary.organizationsSkipped !== 1 ? 's' : ''} already existed (skipped)\n`;
+        message += `↻ ${summary.organizationsSkipped} business unit${summary.organizationsSkipped !== 1 ? 's' : ''} already existed (skipped)\n`;
       }
       if (summary.resourcesCreated > 0) {
         message += `✓ ${summary.resourcesCreated} new resource${summary.resourcesCreated !== 1 ? 's' : ''} created\n`;

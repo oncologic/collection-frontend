@@ -56,10 +56,10 @@ export const roleCategories = {
       // Advocate role removed - must be assigned by admin only
       {
         id: "foundation",
-        name: "Foundation/Organization Staff",
+        name: "Foundation/Business Unit Staff",
         requiresApproval: true,
         industries: [
-          "Patient Advocacy Organization",
+          "Patient Advocacy Business Unit",
           "Medical Foundation",
           "Research Foundation",
           "Healthcare Nonprofit",

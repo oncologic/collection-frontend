@@ -55,36 +55,6 @@ export const getUserSubscription = async (headers = {}) => {
 };
 
 /**
- * Create a Stripe subscription
- * @param {Object} params - Subscription parameters
- * @param {string} params.planName - The name of the plan to subscribe to
- * @param {Object} headers - Request headers including authorization
- * @returns {Promise<Object>} - Promise that resolves to Stripe subscription data
- */
-export const createStripeSubscription = async ({ planName }, headers = {}) => {
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/subscriptions/create-subscription`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...headers,
-      },
-      body: JSON.stringify({
-        planName,
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to create subscription");
-  }
-
-  return response.json();
-};
-
-/**
  * Cancel user's subscription
  * @param {Object} headers - Request headers including authorization
  * @returns {Promise<Object>} - Promise that resolves to cancellation data
@@ -104,31 +74,6 @@ export const cancelSubscription = async (headers = {}) => {
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.error || "Failed to cancel subscription");
-  }
-
-  return response.json();
-};
-
-/**
- * Reactivate user's subscription
- * @param {Object} headers - Request headers including authorization
- * @returns {Promise<Object>} - Promise that resolves to reactivation data
- */
-export const reactivateSubscription = async (headers = {}) => {
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/subscriptions/reactivate`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...headers,
-      },
-    }
-  );
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to reactivate subscription");
   }
 
   return response.json();

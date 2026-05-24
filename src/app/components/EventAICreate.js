@@ -265,7 +265,7 @@ const EventAICreate = ({
     }
 
     if (selectedOrganizations.length === 0) {
-      toast.error("Please select at least one organization for the events");
+      toast.error("Please select at least one business unit for the events");
       return;
     }
 
@@ -495,7 +495,7 @@ const EventAICreate = ({
               (() => {})(true);
               setShowPreview(false);
               toast(
-                `Found ${orgsWithTempIds.length} new organization${
+                `Found ${orgsWithTempIds.length} new business unit${
                   orgsWithTempIds.length > 1 ? "s" : ""
                 } to create first`,
                 {
@@ -572,7 +572,7 @@ const EventAICreate = ({
         }`;
         const orgMsg =
           orgCount > 0
-            ? ` and found ${orgCount} new organization${
+            ? ` and found ${orgCount} new business unit${
                 orgCount > 1 ? "s" : ""
               }`
             : "";
@@ -742,7 +742,7 @@ const EventAICreate = ({
                   >
                     <div className="flex items-start justify-between mb-4">
                       <h4 className="text-lg font-medium text-gray-900">
-                        New Organization {index + 1}
+                        New Business Unit {index + 1}
                       </h4>
                       <div className="flex space-x-2">
                         <button
@@ -752,7 +752,7 @@ const EventAICreate = ({
                             )
                           }
                           className="text-blue-600 hover:text-blue-700"
-                          title="Edit organization"
+                          title="Edit business unit"
                         >
                           <FaEdit />
                         </button>
@@ -764,7 +764,7 @@ const EventAICreate = ({
                             (() => {})(updatedOrgs);
                           }}
                           className="text-red-600 hover:text-red-700"
-                          title="Delete organization"
+                          title="Delete business unit"
                         >
                           <FaTimes />
                         </button>
@@ -775,7 +775,7 @@ const EventAICreate = ({
                       // Edit Mode
                       <div className="space-y-4">
                         <InputField
-                          label="Organization Name"
+                          label="Business Unit Name"
                           value={org.name || ""}
                           onChange={(e) => {
                             const updatedOrgs = [[]];
@@ -948,16 +948,16 @@ const EventAICreate = ({
                 {/* Organization Selection (Second, filtered by tenant) */}
                 <div>
                   <MultiSelect
-                    label="Organizations (Required)"
+                    label="Business Units (Required)"
                     value={selectedOrganizations}
                     onChange={(orgs) => setSelectedOrganizations(orgs)}
                     options={filteredOrganizations}
-                    placeholder="Select organizations..."
+                    placeholder="Select business units..."
                     required
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     All generated events will be associated with these
-                    organizations
+                    business units
                   </p>
                 </div>
               </div>
@@ -1283,7 +1283,7 @@ const EventAICreate = ({
                             />
 
                             <MultiSelect
-                              label="Organizations"
+                              label="Business Units"
                               value={organizations.filter((org) =>
                                 event.organizations?.includes(org.id)
                               )}
@@ -1295,7 +1295,7 @@ const EventAICreate = ({
                                 )
                               }
                               options={organizations}
-                              placeholder="Select organizations"
+                              placeholder="Select business units"
                               required
                             />
 
@@ -1413,7 +1413,7 @@ const EventAICreate = ({
                               <div className="flex items-center space-x-2 text-sm">
                                 <FaUsers className="text-gray-500" />
                                 <span className="text-gray-600">
-                                  {event.organizations.length} organization
+                                  {event.organizations.length} business unit
                                   {event.organizations.length > 1 ? "s" : ""}
                                 </span>
                               </div>
@@ -1441,7 +1441,7 @@ const EventAICreate = ({
                 <div className="mt-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-semibold text-gray-900">
-                      New Organizations to Create ({[].length})
+                      New Business Units to Create ({[].length})
                     </h3>
                     <button
                       onClick={() =>
@@ -1466,7 +1466,7 @@ const EventAICreate = ({
                         >
                           <div className="flex items-start justify-between mb-4">
                             <h4 className="text-lg font-medium text-gray-900">
-                              New Organization {index + 1}
+                              New Business Unit {index + 1}
                             </h4>
                             <div className="flex space-x-2">
                               <button
@@ -1476,7 +1476,7 @@ const EventAICreate = ({
                                   )
                                 }
                                 className="text-blue-600 hover:text-blue-700"
-                                title="Edit organization"
+                                title="Edit business unit"
                               >
                                 <FaEdit />
                               </button>
@@ -1488,7 +1488,7 @@ const EventAICreate = ({
                                   (() => {})(updatedOrgs);
                                 }}
                                 className="text-red-600 hover:text-red-700"
-                                title="Delete organization"
+                                title="Delete business unit"
                               >
                                 <FaTimes />
                               </button>
@@ -1499,7 +1499,7 @@ const EventAICreate = ({
                             // Edit Mode
                             <div className="space-y-4">
                               <InputField
-                                label="Organization Name"
+                                label="Business Unit Name"
                                 value={org.name || ""}
                                 onChange={(e) => {
                                   const updatedOrgs = [[]];
@@ -1678,13 +1678,13 @@ const EventAICreate = ({
                   {isConfirming ? (
                     <>
                       <FaSpinner className="animate-spin" />
-                      <span>Creating Organizations...</span>
+                      <span>Creating Business Units...</span>
                     </>
                   ) : (
                     <>
                       <FaCheck />
                       <span>
-                        Create {[].length} Organization
+                        Create {[].length} Business Unit
                         {[].length > 1 ? "s" : ""} & Continue
                       </span>
                     </>

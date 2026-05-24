@@ -287,13 +287,15 @@ const ClinicalTrialsSearchPage = () => {
   };
 
   // Toggle selection mode
-  const toggleSelectionMode = () => {
-    setSelectionMode(!selectionMode);
-    if (selectionMode) {
-      // Clear selections when exiting selection mode
-      setSelectedTrials([]);
-    }
-  };
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode((currentSelectionMode) => {
+      if (currentSelectionMode) {
+        // Clear selections when exiting selection mode
+        setSelectedTrials([]);
+      }
+      return !currentSelectionMode;
+    });
+  }, []);
 
   // Handle trial selection
   const handleSelectTrial = (trial) => {
@@ -464,9 +466,9 @@ const ClinicalTrialsSearchPage = () => {
   };
 
   // Add select all functionality
-  const selectAllTrials = () => {
+  const selectAllTrials = useCallback(() => {
     setSelectedTrials(filteredTrials || []);
-  };
+  }, [filteredTrials]);
 
   // Add deselect all functionality
   const deselectAllTrials = () => {
@@ -505,7 +507,7 @@ const ClinicalTrialsSearchPage = () => {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [selectionMode, filteredTrials, toggleSelectionMode]);
+  }, [selectionMode, selectAllTrials, toggleSelectionMode]);
 
   // Add function to clear selections
   const clearSelections = () => {

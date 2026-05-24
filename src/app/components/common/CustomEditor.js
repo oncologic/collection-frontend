@@ -401,8 +401,8 @@ const CustomEditor = ({
         languageStyle === "future"
           ? "Use future tense and forward-looking language"
           : languageStyle === "past"
-          ? "Use past tense and retrospective language."
-          : "";
+            ? "Use past tense and retrospective language."
+            : "";
 
       let contentTypeLabel = "";
 
@@ -478,45 +478,57 @@ const CustomEditor = ({
 
       images.forEach((img) => {
         // Handle image load errors - refresh expired URLs
-        if (!img.hasAttribute('data-error-handled')) {
-          img.setAttribute('data-error-handled', 'true');
-          
-          img.addEventListener('error', async function onImageError() {
+        if (!img.hasAttribute("data-error-handled")) {
+          img.setAttribute("data-error-handled", "true");
+
+          img.addEventListener("error", async function onImageError() {
             // Only try to refresh once per image to avoid infinite loops
-            if (img.hasAttribute('data-refresh-attempted')) {
+            if (img.hasAttribute("data-refresh-attempted")) {
               return;
             }
-            img.setAttribute('data-refresh-attempted', 'true');
+            img.setAttribute("data-refresh-attempted", "true");
 
             try {
               // Get imageKey from data attribute or extract from URL
-              let imageKey = img.getAttribute('data-image-key');
-              
+              let imageKey = img.getAttribute("data-image-key");
+
               if (!imageKey) {
                 // Try to extract from URL
-                const imageUrl = img.getAttribute('src');
-                if (!imageUrl || imageUrl.startsWith('data:')) {
+                const imageUrl = img.getAttribute("src");
+                if (!imageUrl || imageUrl.startsWith("data:")) {
                   return;
                 }
 
                 try {
                   const urlObj = new URL(imageUrl);
-                  const cloudFrontPattern = /cloudfront\.net|d3q5mz27otbl2j\.cloudfront\.net/i;
-                  
+                  const cloudFrontPattern =
+                    /cloudfront\.net|d3q5mz27otbl2j\.cloudfront\.net/i;
+
                   if (cloudFrontPattern.test(imageUrl)) {
                     const pathname = urlObj.pathname;
-                    imageKey = pathname.startsWith('/') ? pathname.slice(1) : pathname;
-                  } else if (imageUrl.includes('amazonaws.com') || imageUrl.includes('s3.')) {
+                    imageKey = pathname.startsWith("/")
+                      ? pathname.slice(1)
+                      : pathname;
+                  } else if (imageUrl.includes(".blob.core.windows.net")) {
+                    const parts = urlObj.pathname.split("/").filter(Boolean);
+                    imageKey =
+                      parts.length > 1
+                        ? parts.slice(1).join("/")
+                        : parts.join("/");
+                  } else if (
+                    imageUrl.includes("amazonaws.com") ||
+                    imageUrl.includes("s3.")
+                  ) {
                     const pathname = urlObj.pathname;
-                    const parts = pathname.split('/').filter(p => p);
+                    const parts = pathname.split("/").filter((p) => p);
                     if (parts.length > 1) {
-                      imageKey = parts.slice(1).join('/');
+                      imageKey = parts.slice(1).join("/");
                     } else {
-                      imageKey = pathname.replace(/^\//, '');
+                      imageKey = pathname.replace(/^\//, "");
                     }
                   }
                 } catch (urlError) {
-                  console.error('Error parsing image URL:', urlError);
+                  console.error("Error parsing image URL:", urlError);
                   return;
                 }
               }
@@ -525,9 +537,9 @@ const CustomEditor = ({
                 // Call refresh endpoint
                 const token = await getToken();
                 const refreshUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/attachments/refresh-url/${encodeURIComponent(imageKey)}`;
-                
+
                 const response = await fetch(refreshUrl, {
-                  headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                  headers: token ? { Authorization: `Bearer ${token}` } : {},
                 });
 
                 if (response.ok) {
@@ -535,13 +547,13 @@ const CustomEditor = ({
                   if (data.url) {
                     // Update image src with fresh URL
                     img.src = data.url;
-                    img.removeAttribute('data-refresh-attempted'); // Allow future refreshes
-                    console.log('Image URL refreshed successfully');
+                    img.removeAttribute("data-refresh-attempted"); // Allow future refreshes
+                    console.log("Image URL refreshed successfully");
                   }
                 }
               }
             } catch (error) {
-              console.error('Error refreshing image URL:', error);
+              console.error("Error refreshing image URL:", error);
             }
           });
         }
@@ -600,6 +612,13 @@ const CustomEditor = ({
                 imageKey = pathname.startsWith("/")
                   ? pathname.slice(1)
                   : pathname;
+              }
+
+              // Check if it's an Azure Blob Storage signed URL.
+              if (!imageKey && imageUrl.includes(".blob.core.windows.net")) {
+                const parts = urlObj.pathname.split("/").filter(Boolean);
+                imageKey =
+                  parts.length > 1 ? parts.slice(1).join("/") : parts.join("/");
               }
 
               // Check if it's an S3 presigned URL
@@ -700,7 +719,7 @@ const CustomEditor = ({
     return () => {
       observer.disconnect();
     };
-  }, [editor, editable, readOnly]);
+  }, [editor, editable, getToken, readOnly]);
 
   if (!editor) {
     return null;
@@ -926,7 +945,9 @@ const CustomEditor = ({
 
         .ProseMirror .image-download-btn {
           opacity: 0;
-          transition: opacity 0.2s ease, transform 0.2s ease;
+          transition:
+            opacity 0.2s ease,
+            transform 0.2s ease;
           width: 36px;
           height: 36px;
           min-width: 36px;

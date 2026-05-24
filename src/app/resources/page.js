@@ -779,7 +779,7 @@ const Education = () => {
       typeId: pendingResource.resourceType || null,
       sensitivityLevelId: pendingResource.sensitivityLevel || null,
       expertiseLevelId: pendingResource.expertiseLevel || null,
-      targetAudienceId: pendingResource.targetAudienceId || 1,
+      targetAudienceId: pendingResource.targetAudienceId || "",
       videoUrl: pendingResource.videoUrl || "",
       timestamps: pendingResource.timestamps || "",
       fullText: pendingResource.fullText || "",

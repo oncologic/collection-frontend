@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { DateTime } from "luxon";
 import { STATUS_OPTIONS } from "../forms/AddCollectionForm";
 import DOMPurify from "dompurify";
-import { FaClock, FaCalendar, FaGoogle, FaMapMarkerAlt, FaTag, FaExternalLinkAlt } from "react-icons/fa";
+import { FaClock, FaCalendar, FaMapMarkerAlt, FaTag, FaExternalLinkAlt } from "react-icons/fa";
 import { formatTimeDisplay } from "./CalendarView";
 
 // Helper function to strip HTML tags
@@ -22,7 +22,6 @@ export default function ListView({
   onEventClick,
   currentMonth,
   onDateChange,
-  showGoogleCalendarEvents = false,
   showPublicOnly = false,
   highlightedEvents = new Set(),
 }) {
@@ -196,9 +195,6 @@ export default function ListView({
                             : event.title || event.name}
                         </h3>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          {event.isGoogleCalendarEvent && (
-                            <FaGoogle className="w-4 h-4 text-blue-500" title="From Google Calendar" />
-                          )}
                           {event.type === "external_link" && (
                             <FaExternalLinkAlt className="w-4 h-4 text-blue-500" title="External Link" />
                           )}

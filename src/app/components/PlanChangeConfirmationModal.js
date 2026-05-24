@@ -49,20 +49,19 @@ const PlanChangeConfirmationModal = ({
     if (isUpgrade) {
       return [
         "Immediate access to new features",
-        "Pro-rated billing for current period",
-        "New billing cycle starts",
+        "Internal plan access updates now",
         "Keep all existing data",
       ];
     }
     if (isDowngrade) {
       return [
         "Reduced feature access",
-        "Changes at end of billing period",
+        "Changes take effect immediately",
         "Keep existing data",
         "Can upgrade again anytime",
       ];
     }
-    return ["Plan features will be updated", "Billing adjusted accordingly"];
+    return ["Plan features will be updated"];
   };
 
   const getPrice = () => {
@@ -148,9 +147,8 @@ const PlanChangeConfirmationModal = ({
                 <div className="text-sm text-orange-800">
                   <p className="font-medium mb-1">Important:</p>
                   <p>
-                    Your downgrade will take effect at the end of your current
-                    billing period. You&apos;ll continue to have full access
-                    until then.
+                    Your downgrade will take effect immediately and may reduce
+                    access to features.
                   </p>
                 </div>
               </div>

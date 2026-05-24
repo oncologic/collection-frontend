@@ -194,7 +194,7 @@ const EventTable = ({
     },
     {
       field: "organizations",
-      headerName: "Organizations",
+      headerName: "Business Units",
       sortable: true,
       filter: true,
       flex: 1,
@@ -467,7 +467,7 @@ const EventTable = ({
                   { id: "startTime", label: "Start Time" },
                   { id: "endDate", label: "End Date" },
                   { id: "endTime", label: "End Time" },
-                  { id: "organizations", label: "Organizations" },
+                  { id: "organizations", label: "Business Units" },
                   { id: "tags", label: "Tags" },
                   { id: "locationCity", label: "City" },
                   { id: "locationState", label: "State" },

@@ -28,7 +28,7 @@ export async function searchGlobal(searchQuery, headers) {
 export async function fetchOrganizations(headers) {
   try {
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/organizations`,
+      `${process.env.NEXT_PUBLIC_API_URL}/api/business-units`,
       {
         headers,
       }
@@ -36,13 +36,15 @@ export async function fetchOrganizations(headers) {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || "Failed to fetch organizations");
+      throw new Error(error.message || "Failed to fetch business units");
     }
 
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error("Error fetching organizations:", error);
+    console.error("Error fetching business units:", error);
     throw error;
   }
 }
+
+export const fetchBusinessUnits = fetchOrganizations;

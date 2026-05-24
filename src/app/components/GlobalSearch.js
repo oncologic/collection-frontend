@@ -7,6 +7,8 @@ import { useGetAllCollections } from "../hooks/useResources";
 import { useGetResources } from "../hooks/useResources";
 import { useEvents } from "../hooks/useEvents";
 
+const EMPTY_SEARCH_ITEMS = [];
+
 const GlobalSearch = () => {
   const {
     isSearchOpen,
@@ -18,9 +20,9 @@ const GlobalSearch = () => {
   } = useGlobalSearch();
 
   // Fetch data for search
-  const { data: collections = [] } = useGetAllCollections();
-  const { data: resources = [] } = useGetResources();
-  const { data: events = [] } = useEvents();
+  const { data: collections = EMPTY_SEARCH_ITEMS } = useGetAllCollections();
+  const { data: resources = EMPTY_SEARCH_ITEMS } = useGetResources();
+  const { data: events = EMPTY_SEARCH_ITEMS } = useEvents();
 
   // Extract external links, notations, and attachments from collections
   const { externalLinks, notations, attachments } = useMemo(() => {
@@ -87,7 +89,7 @@ const GlobalSearch = () => {
       }
     });
 
-    return { links, notations, attachments };
+    return { externalLinks: links, notations, attachments };
   }, [collections]);
 
   // Memoize the search data object to prevent unnecessary updates
@@ -100,7 +102,7 @@ const GlobalSearch = () => {
       notations,
       attachments,
     }),
-    [collections, resources, events, externalLinks, notations, attachments]
+    [collections, resources, events, externalLinks, notations, attachments],
   );
 
   // Update search data when data changes

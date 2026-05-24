@@ -36,7 +36,6 @@ import {
   FaDatabase,
   FaGlobe,
   FaEye,
-  FaGoogle,
   FaUserPlus,
   FaUsers,
   FaTable,
@@ -69,8 +68,7 @@ import {
   useRemoveCollectionCollaborator,
 } from "@/app/hooks/useCollections";
 import { useAssociatedSocialMediaAccounts } from "@/app/hooks/useSocialMedia";
-import SocialMediaButton from "@/app/components/social-media/SocialMediaButton";
-import SocialMediaModal from "@/app/components/social-media/SocialMediaModal";
+import SocialMediaAssociationManagerModal from "@/app/components/social-media/SocialMediaAssociationManagerModal";
 import LoadingSkeleton from "@/app/components/LoadingSkeleton";
 import CustomEditor from "@/app/components/common/CustomEditor";
 import AddCollectionForm, {
@@ -305,7 +303,6 @@ export default function CollectionPage() {
 
   // Social media state
   const [showSocialMediaModal, setShowSocialMediaModal] = useState(false);
-  const [showSocialDropdown, setShowSocialDropdown] = useState(false);
 
   const {
     data: collection,
@@ -314,7 +311,7 @@ export default function CollectionPage() {
   } = useGetCollectionById(collectionId);
 
   // Fetch associated social media accounts
-  const { data: socialMediaAssociations = [], isLoading: socialMediaLoading } =
+  const { data: socialMediaAssociations = [] } =
     useAssociatedSocialMediaAccounts(collectionId, "collection");
 
   // Extract the accounts from the associations
@@ -323,6 +320,14 @@ export default function CollectionPage() {
       .map((association) => association.account)
       .filter(Boolean);
   }, [socialMediaAssociations]);
+
+  const collectionHashtags = useMemo(
+    () => (Array.isArray(collection?.hashtags) ? collection.hashtags : []),
+    [collection?.hashtags]
+  );
+
+  const socialMediaActionCount =
+    socialMediaAccounts.length + collectionHashtags.length;
 
   // Get link groups for the external links in this collection
   const { data: linkGroups } = useLinkGroupById(
@@ -363,15 +368,8 @@ export default function CollectionPage() {
   // Only fetch events if user opted in to show regular events
   const { data: allEventsData = [] } = useEvents({ enabled: showRegularEvents });
 
-  // Separate Google Calendar events from regular organization events
-  const googleCalendarEvents = useMemo(() => {
-    return allEventsData.filter(
-      (event) => event.isGoogleCalendarEvent === true
-    );
-  }, [allEventsData]);
-
   const regularOrganizationEvents = useMemo(() => {
-    return allEventsData.filter((event) => !event.isGoogleCalendarEvent);
+    return allEventsData;
   }, [allEventsData]);
 
   const [selectedExternalLink, setSelectedExternalLink] = useState(null);
@@ -419,8 +417,6 @@ export default function CollectionPage() {
   });
 
   const [showCalendarView, setShowCalendarView] = useState(false);
-  const [showGoogleCalendarEvents, setShowGoogleCalendarEvents] =
-    useState(false); // Default to false (opt-in)
   const [showPublicOnly, setShowPublicOnly] = useState(false); // Default to false (show all)
 
   // Add a new ref for the calendar section
@@ -1021,10 +1017,6 @@ export default function CollectionPage() {
         }, 150);
       }
 
-      // Close social dropdown
-      if (!event.target.closest(".group")) {
-        setShowSocialDropdown(false);
-      }
     }
 
     function handleTouchOutside(event) {
@@ -2564,93 +2556,20 @@ export default function CollectionPage() {
                         </>
                       )}
 
-                      {/* Social Media section */}
-                      {(socialMediaAccounts.length > 0 ||
-                        (collection?.hashtags &&
-                          collection.hashtags.length > 0)) && (
-                        <>
-                          {/* If both options available, show submenu */}
-                          {socialMediaAccounts.length > 0 &&
-                            collection?.hashtags &&
-                            collection.hashtags.length > 0 && (
-                              <>
-                                <div className="px-3 py-1 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Social Media
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    setShowSocialMediaModal(true);
-                                    setShowMobileDropdown(false);
-                                  }}
-                                  className="flex items-center gap-2 px-3 py-2 w-full text-left hover:bg-gray-100 rounded-md text-gray-700 ml-2"
-                                >
-                                  <FaGlobe className="text-gray-500" />
-                                  <span>
-                                    Accounts ({socialMediaAccounts.length})
-                                  </span>
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    const hashtagsParam = encodeURIComponent(
-                                      collection.hashtags.join(",")
-                                    );
-                                    router.push(
-                                      `/social-media/hashtags?hashtags=${hashtagsParam}`
-                                    );
-                                    setShowMobileDropdown(false);
-                                  }}
-                                  className="flex items-center gap-2 px-3 py-2 w-full text-left hover:bg-gray-100 rounded-md text-gray-700 ml-2"
-                                >
-                                  <FaHashtag className="text-gray-500" />
-                                  <span>
-                                    Hashtags ({collection.hashtags.length})
-                                  </span>
-                                </button>
-                              </>
-                            )}
-
-                          {/* If only accounts available */}
-                          {socialMediaAccounts.length > 0 &&
-                            (!collection?.hashtags ||
-                              collection.hashtags.length === 0) && (
-                              <button
-                                onClick={() => {
-                                  setShowSocialMediaModal(true);
-                                  setShowMobileDropdown(false);
-                                }}
-                                className="flex items-center gap-2 px-3 py-2 w-full text-left hover:bg-gray-100 rounded-md text-gray-700"
-                              >
-                                <FaHashtag />
-                                <span>
-                                  Social Media ({socialMediaAccounts.length})
-                                </span>
-                              </button>
-                            )}
-
-                          {/* If only hashtags available */}
-                          {/* {collection?.hashtags &&
-                            collection.hashtags.length > 0 &&
-                            socialMediaAccounts.length === 0 && (
-                              <button
-                                onClick={() => {
-                                  const hashtagsParam = encodeURIComponent(
-                                    collection.hashtags.join(",")
-                                  );
-                                  router.push(
-                                    `/social-media/hashtags?hashtags=${hashtagsParam}`
-                                  );
-                                  setShowMobileDropdown(false);
-                                }}
-                                className="flex items-center gap-2 px-3 py-2 w-full text-left hover:bg-gray-100 rounded-md text-gray-700"
-                              >
-                                <FaHashtag />
-                                <span>
-                                  Social Hashtags ({collection.hashtags.length})
-                                </span>
-                              </button>
-                            )} */}
-                        </>
-                      )}
+                      <button
+                        onClick={() => {
+                          setShowSocialMediaModal(true);
+                          setShowMobileDropdown(false);
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 w-full text-left hover:bg-gray-100 rounded-md text-gray-700"
+                      >
+                        <FaGlobe />
+                        <span>
+                          Social Media{" "}
+                          {socialMediaActionCount > 0 &&
+                            `(${socialMediaActionCount})`}
+                        </span>
+                      </button>
 
                       <button
                         onClick={() => {
@@ -2745,92 +2664,19 @@ export default function CollectionPage() {
                       </div>
                     )}
                   </div>
-                  {/* Social Media - show if accounts exist or collection has hashtags */}
-                  {(socialMediaAccounts.length > 0 ||
-                    (collection?.hashtags &&
-                      collection.hashtags.length > 0)) && (
-                    <div className="relative group">
-                      <button
-                        onClick={() => {
-                          // If only one option available, go directly to it
-                          if (
-                            collection?.hashtags &&
-                            collection.hashtags.length > 0 &&
-                            socialMediaAccounts.length === 0
-                          ) {
-                            const hashtagsParam = encodeURIComponent(
-                              collection.hashtags.join(",")
-                            );
-                            router.push(
-                              `/social-media/hashtags?hashtags=${hashtagsParam}`
-                            );
-                          } else if (
-                            socialMediaAccounts.length > 0 &&
-                            (!collection?.hashtags ||
-                              collection.hashtags.length === 0)
-                          ) {
-                            setShowSocialMediaModal(true);
-                          } else {
-                            // Both available - show dropdown
-                            setShowSocialDropdown(!showSocialDropdown);
-                          }
-                        }}
-                        className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-md text-slate-600 hover:text-slate-700 hover:bg-slate-100"
-                        title="Social Media"
-                      >
-                        <FaHashtag />
-                        <span className="text-xs">Social</span>
-                        {(socialMediaAccounts.length > 0 ||
-                          (collection?.hashtags &&
-                            collection.hashtags.length > 0)) && (
-                          <span className="text-xs ml-1">
-                            (
-                            {socialMediaAccounts.length +
-                              (collection?.hashtags?.length || 0)}
-                            )
-                          </span>
-                        )}
-                      </button>
-
-                      {/* Dropdown menu when both options are available */}
-                      {showSocialDropdown &&
-                        socialMediaAccounts.length > 0 &&
-                        collection?.hashtags &&
-                        collection.hashtags.length > 0 && (
-                          <div className="absolute top-full mt-1 right-0 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[200px]">
-                            <button
-                              onClick={() => {
-                                setShowSocialMediaModal(true);
-                                setShowSocialDropdown(false);
-                              }}
-                              className="flex items-center gap-2 px-4 py-2 w-full text-left hover:bg-gray-50 text-gray-700"
-                            >
-                              <FaGlobe className="text-gray-500" />
-                              <span>
-                                Accounts ({socialMediaAccounts.length})
-                              </span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                const hashtagsParam = encodeURIComponent(
-                                  collection.hashtags.join(",")
-                                );
-                                router.push(
-                                  `/social-media/hashtags?hashtags=${hashtagsParam}`
-                                );
-                                setShowSocialDropdown(false);
-                              }}
-                              className="flex items-center gap-2 px-4 py-2 w-full text-left hover:bg-gray-50 text-gray-700"
-                            >
-                              <FaHashtag className="text-gray-500" />
-                              <span>
-                                Hashtags ({collection.hashtags.length})
-                              </span>
-                            </button>
-                          </div>
-                        )}
-                    </div>
-                  )}
+                  <button
+                    onClick={() => setShowSocialMediaModal(true)}
+                    className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-md text-slate-600 hover:text-slate-700 hover:bg-slate-100"
+                    title="Manage Social Media"
+                  >
+                    <FaGlobe />
+                    <span className="text-xs">Social</span>
+                    {socialMediaActionCount > 0 && (
+                      <span className="text-xs ml-1">
+                        ({socialMediaActionCount})
+                      </span>
+                    )}
+                  </button>
                   {collection.type === "external" && (
                     <>
                       {/* <button
@@ -2896,6 +2742,7 @@ export default function CollectionPage() {
               {[
                 { id: "details", label: "Details", Icon: FaFileAlt },
                 { id: "whiteboard", label: "Whiteboard", Icon: FaChalkboard },
+                { id: "gantt", label: "Gantt", Icon: FaCalendar },
               ].map(({ id: tabId, label, Icon }) => {
                 const isActive = activeHeaderTab === tabId;
 
@@ -2929,6 +2776,12 @@ export default function CollectionPage() {
                 onSave={handleSaveCollectionWhiteboard}
               />
             </div>
+          ) : activeHeaderTab === "gantt" ? (
+            <WorkflowGanttChart
+              collection={collection}
+              canEdit={canEditCollection}
+              onUpdateStepDates={handleUpdateWorkflowStepDates}
+            />
           ) : (
             <>
               {/* Public JSON Sharing Control - Only for Admins */}
@@ -2945,12 +2798,6 @@ export default function CollectionPage() {
                   />
                 </div>
               )}
-
-              <WorkflowGanttChart
-                collection={collection}
-                canEdit={canEditCollection}
-                onUpdateStepDates={handleUpdateWorkflowStepDates}
-              />
 
               {/* Resources List */}
               <div className="space-y-6 p-6">
@@ -3211,8 +3058,7 @@ export default function CollectionPage() {
 
             {/* Show a message if no events */}
             {(!combinedEvents || combinedEvents.length === 0) &&
-             !showRegularEvents &&
-             googleCalendarEvents.length === 0 && (
+             !showRegularEvents && (
               <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
                 <p className="text-gray-500">No events with dates found in this collection.</p>
                 <p className="text-sm text-gray-400 mt-1">Add dates to your external links or notations to see them in the calendar.</p>
@@ -3223,7 +3069,6 @@ export default function CollectionPage() {
               events={[
                 ...(combinedEvents || []),
                 ...(showRegularEvents ? regularOrganizationEvents : []),
-                ...googleCalendarEvents,
               ].map((event) => ({
                 ...event,
                 id: event.id || Math.random().toString(),
@@ -3250,11 +3095,9 @@ export default function CollectionPage() {
               }))}
               isAdmin={isAdmin}
               organizations={organizations || []}
-              showGoogleCalendarEvents={showGoogleCalendarEvents}
               showPublicOnly={showPublicOnly}
               showRegularEvents={showRegularEvents}
               isCollectionContext={true}
-              onGoogleCalendarToggle={setShowGoogleCalendarEvents}
               onPublicOnlyToggle={setShowPublicOnly}
               onRegularEventsToggle={setShowRegularEvents}
               onExternalLinkClick={(id) => {
@@ -3262,7 +3105,11 @@ export default function CollectionPage() {
                   (l) => l.id === id
                 );
                 if (link) {
-                  router.push(`/external-links/${link.id}`);
+                  router.push(
+                    `/external-links/${link.id}?collectionId=${encodeURIComponent(
+                      collectionId
+                    )}`
+                  );
                 }
               }}
             />
@@ -3280,13 +3127,10 @@ export default function CollectionPage() {
               events={[
                 ...(combinedEvents || []),
                 ...(showRegularEvents ? regularOrganizationEvents : []),
-                ...googleCalendarEvents,
               ]}
-              showGoogleCalendarEvents={showGoogleCalendarEvents}
               showPublicOnly={showPublicOnly}
               showRegularEvents={showRegularEvents}
               isCollectionContext={true} // Pass true to indicate we're in collection context
-              onGoogleCalendarToggle={setShowGoogleCalendarEvents}
               onPublicOnlyToggle={setShowPublicOnly}
               onRegularEventsToggle={setShowRegularEvents}
             />
@@ -3925,13 +3769,14 @@ export default function CollectionPage() {
         }}
       />
       {/* Social Media Modal */}
-      <SocialMediaModal
+      <SocialMediaAssociationManagerModal
         isOpen={showSocialMediaModal}
         onClose={() => setShowSocialMediaModal(false)}
-        title="Social Media Accounts"
+        title="Collection Social Media"
+        entityId={collectionId}
+        entityType="collection"
         entityName={collection?.name}
-        accounts={socialMediaAccounts}
-        loading={socialMediaLoading}
+        hashtags={collectionHashtags}
       />
     </div>
   );

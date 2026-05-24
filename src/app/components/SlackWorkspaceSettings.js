@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useContextAuth } from "@/app/context/authContext";
 import {
   FaSlack,
@@ -26,13 +26,7 @@ export default function SlackWorkspaceSettings() {
   const [selectedWorkspace, setSelectedWorkspace] = useState(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  useEffect(() => {
-    if (systemUser && selectedTenants?.length) {
-      fetchWorkspaces();
-    }
-  }, [systemUser, selectedTenants]);
-
-  const fetchWorkspaces = async () => {
+  const fetchWorkspaces = useCallback(async () => {
     if (!selectedTenants?.length) {
       console.log('No tenants selected, skipping fetch');
       return;
@@ -57,7 +51,13 @@ export default function SlackWorkspaceSettings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getAuthHeader, selectedTenants]);
+
+  useEffect(() => {
+    if (systemUser && selectedTenants?.length) {
+      fetchWorkspaces();
+    }
+  }, [systemUser, selectedTenants, fetchWorkspaces]);
 
   const fetchNotificationLogs = async (workspaceId) => {
     try {

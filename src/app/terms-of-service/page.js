@@ -202,21 +202,21 @@ const TermsOfService = () => {
         </ul>
 
         <h2 className="text-xl font-semibold mb-4" id="subscription-terms">
-          7. Subscription and Payment Terms
+          7. Subscription and Usage Terms
         </h2>
         <div className="mb-3">
           <h3 className="font-medium mb-2">7.1 Service Plans</h3>
           <p className="mb-3">
             We offer various subscription plans with different features and AI
-            usage limits. Pricing and features are subject to change with
-            notice.
+            usage limits. Features are subject to change with notice.
           </p>
         </div>
         <div className="mb-6">
           <h3 className="font-medium mb-2">7.2 AI Usage Credits</h3>
           <p className="mb-3">
             AI chat features may be subject to usage limits based on your
-            subscription plan. Additional credits may be purchased as needed.
+            subscription plan. Administrators may adjust credits for internal
+            users as needed.
           </p>
         </div>
 

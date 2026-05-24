@@ -104,7 +104,7 @@ const ViewAllOrganizationsModal = ({
       <div className="text-gray-700 bg-gradient-to-br from-blue-50 to-purple-100 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex flex-col md:flex-row justify-between items-center p-8">
           <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-bold">All Organizations</h2>
+            <h2 className="text-2xl font-bold">All Business Units</h2>
           </div>
           <div className="flex rounded-lg border border-gray-300 p-1 bg-white">
             <button
@@ -157,7 +157,7 @@ const ViewAllOrganizationsModal = ({
         <div className="pl-4 md:pl-8 pr-4 md:pr-8">
           <input
             type="text"
-            placeholder="Search organizations..."
+            placeholder="Search business units..."
             className="w-full px-4 py-2 border rounded-lg"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}

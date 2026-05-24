@@ -580,9 +580,9 @@ export default function AdminDashboard() {
           </div>
         </FlippableCard>
 
-        {/* Organizations Card */}
+        {/* Business Units Card */}
         <FlippableCard
-          title="Organizations"
+          title="Business Units"
           value={organizations?.length || 0}
           frontStats={[
             {
@@ -593,7 +593,7 @@ export default function AdminDashboard() {
                   count={organizationStats.thisMonth.length}
                   onViewDetails={() =>
                     openDetailsModal(
-                      "Organizations - This Month Details",
+                      "Business Units - This Month Details",
                       organizationStats.thisMonth,
                       organizationColumns
                     )
@@ -609,7 +609,7 @@ export default function AdminDashboard() {
                   count={organizationStats.lastMonth.length}
                   onViewDetails={() =>
                     openDetailsModal(
-                      "Organizations - Last Month Details",
+                      "Business Units - Last Month Details",
                       organizationStats.lastMonth,
                       organizationColumns
                     )
@@ -625,7 +625,7 @@ export default function AdminDashboard() {
                 onClick={(e) => {
                   e.stopPropagation();
                   openDetailsModal(
-                    "Organizations Details",
+                    "Business Units Details",
                     organizations,
                     organizationColumns
                   );

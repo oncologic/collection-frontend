@@ -3,10 +3,9 @@ import { DateTime } from "luxon";
 import Image from "next/image";
 import { STATUS_OPTIONS } from "../forms/AddCollectionForm";
 import DOMPurify from "dompurify";
-import { FaClock, FaList, FaCalendar, FaGoogle } from "react-icons/fa";
+import { FaClock, FaList, FaCalendar } from "react-icons/fa";
 import CalendarView, { hasTimeInfo, formatTimeDisplay } from "./CalendarView";
 import MultiDayCalendarView from "./MultiDayCalendarView";
-import { useGoogleCalendar } from "../../hooks/useGoogleCalendar";
 
 // Helper function to strip HTML tags
 const stripHtml = (html) => {
@@ -26,7 +25,6 @@ export default function WeekView({
   currentDate,
   onDateChange,
   onDayClick,
-  showGoogleCalendarEvents = true,
   showPublicOnly = false,
 }) {
   const [weekStart, setWeekStart] = useState(() => {
@@ -36,11 +34,7 @@ export default function WeekView({
   });
   const [viewMode, setViewMode] = useState("calendar"); // Default to calendar view
   const [selectedDay, setSelectedDay] = useState(null);
-  const [localShowGoogleCalendar, setLocalShowGoogleCalendar] = useState(showGoogleCalendarEvents);
   const [localShowPublicOnly, setLocalShowPublicOnly] = useState(showPublicOnly);
-
-  // Google Calendar integration
-  const { integrationStatus } = useGoogleCalendar();
 
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1024
@@ -64,11 +58,6 @@ export default function WeekView({
     }
   }, [currentDate]);
 
-  // Update local filter states when props change
-  useEffect(() => {
-    setLocalShowGoogleCalendar(showGoogleCalendarEvents);
-  }, [showGoogleCalendarEvents]);
-
   useEffect(() => {
     setLocalShowPublicOnly(showPublicOnly);
   }, [showPublicOnly]);
@@ -90,11 +79,6 @@ export default function WeekView({
     return events.filter((event) => {
       if (!event.startDate && !event.date) return false;
 
-      // Filter out Google Calendar events if toggle is off
-      if (!localShowGoogleCalendar && event.isGoogleCalendarEvent) {
-        return false;
-      }
-      
       // Filter out non-public events if public-only mode is on
       if (localShowPublicOnly && event.visibility !== 'public') {
         return false;
@@ -105,7 +89,7 @@ export default function WeekView({
 
       return eventDate >= weekStart && eventDate <= weekEnd;
     });
-  }, [events, weekStart, localShowGoogleCalendar, localShowPublicOnly]);
+  }, [events, weekStart, localShowPublicOnly]);
 
   // Organize events by day
   const eventsByDay = useMemo(() => {
@@ -189,24 +173,6 @@ export default function WeekView({
         <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center w-full sm:w-auto">
           {/* Filter controls */}
           <div className="flex flex-wrap items-center gap-3 mr-4">
-            {/* Google Calendar controls */}
-            {integrationStatus?.connected && (
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={localShowGoogleCalendar}
-                    onChange={(e) => setLocalShowGoogleCalendar(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-600 flex items-center gap-1">
-                    <FaGoogle className="text-blue-500" />
-                    Google Calendar
-                  </span>
-                </label>
-              </div>
-            )}
-            
             {/* Public events only toggle */}
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -562,12 +528,6 @@ export default function WeekView({
                               }
                             `}
                           >
-                            {/* Google Calendar indicator */}
-                            {event.isGoogleCalendarEvent && (
-                              <div className="absolute top-1 right-1">
-                                <FaGoogle size={10} className="text-blue-500" />
-                              </div>
-                            )}
                             <div className="flex items-start">
                               <div
                                 className={`w-2 h-2 rounded-full ${statusColor} mt-1 mr-2 flex-shrink-0`}

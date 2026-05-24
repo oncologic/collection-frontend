@@ -639,18 +639,18 @@ Input description: ${aiPrompt}`,
             </div>
           </div>
 
-          {/* Organizations and Tags */}
+          {/* Business Units and Tags */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-900">
-              Organization & Tags
+              Business Units & Tags
             </h3>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Organizations
+                Business Units
               </label>
               <MultiSelect
-                placeholder="Select organizations..."
+                placeholder="Select business units..."
                 options={organizationOptions}
                 value={selectedOrganizations}
                 onChange={setSelectedOrganizations}
@@ -938,7 +938,7 @@ Input description: ${aiPrompt}`,
               type="email"
               value={formData.contactEmail}
               onChange={(e) => handleChange("contactEmail", e.target.value)}
-              placeholder="contact@organization.org"
+              placeholder="contact@businessunit.org"
             />
 
             <InputField

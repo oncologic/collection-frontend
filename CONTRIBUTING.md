@@ -5,7 +5,7 @@ Thanks for your interest in improving this project. This frontend is licensed un
 ## Before You Start
 
 - Check existing issues and pull requests to avoid duplicate work.
-- Open an issue first for large features, security-sensitive changes, user flows, public API contract changes, or payment changes.
+- Open an issue first for large features, security-sensitive changes, user flows, or public API contract changes.
 - Do not include secrets, production credentials, private customer data, or local `.env` files in commits.
 - Do not include vulnerability details in public issues or pull requests.
 

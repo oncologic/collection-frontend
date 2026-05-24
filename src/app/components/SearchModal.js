@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
 import { useContentSearch } from "../hooks/useAI";
 import InputField from "./inputs/InputField";
@@ -27,6 +27,71 @@ const TAB_TYPE_MAP = {
   attachments: "attachment",
 };
 
+const getSearchResultIdentity = (item) => {
+  const type = item?.type || "unknown";
+  const id =
+    item?.id ??
+    item?.externalLinkId ??
+    item?.external_link_id ??
+    item?.resourceId ??
+    item?.resource_id ??
+    item?.collectionExternalLinkId ??
+    item?.collection_external_link_id ??
+    item?.collectionId ??
+    item?.collection_id;
+
+  if (id === undefined || id === null || id === "") {
+    return null;
+  }
+
+  if (type === "attachment") {
+    const parentId =
+      item?.externalLinkId ??
+      item?.external_link_id ??
+      item?.resourceId ??
+      item?.resource_id;
+
+    return parentId ? `${type}-${id}-${parentId}` : `${type}-${id}`;
+  }
+
+  if (type === "link_group") {
+    const parentId =
+      item?.linkingId ??
+      item?.linking_id ??
+      item?.externalLinkId ??
+      item?.external_link_id ??
+      item?.resourceId ??
+      item?.resource_id;
+
+    return parentId ? `${type}-${id}-${parentId}` : `${type}-${id}`;
+  }
+
+  return `${type}-${id}`;
+};
+
+const dedupeSearchResults = (items) => {
+  const seen = new Set();
+
+  return items.filter((item) => {
+    const identity = getSearchResultIdentity(item);
+
+    if (!identity) {
+      return true;
+    }
+
+    if (seen.has(identity)) {
+      return false;
+    }
+
+    seen.add(identity);
+    return true;
+  });
+};
+
+const getSearchResultRenderKey = (item, index) =>
+  getSearchResultIdentity(item) ||
+  `${item?.type || "unknown"}-${item?.title || item?.name || "result"}-${index}`;
+
 const SearchModal = ({
   isOpen,
   onClose,
@@ -39,12 +104,28 @@ const SearchModal = ({
   notations = [],
   linkGroups = [],
   attachments = [],
+  allowedTabs = null,
+  title = "Search Content",
+  placeholder = "Search collections, resources, events, attachments, and link groups...",
 }) => {
   const [activeTab, setActiveTab] = useState("collections");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const searchMutation = useContentSearch();
   const searchInputRef = useRef(null);
+  const visibleTabs = useMemo(
+    () =>
+      Array.isArray(allowedTabs) && allowedTabs.length > 0
+        ? TABS.filter((tab) => allowedTabs.includes(tab.id))
+        : TABS,
+    [allowedTabs],
+  );
+
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(visibleTabs[0].id);
+    }
+  }, [activeTab, visibleTabs]);
 
   // Auto-focus the search input when modal opens
   useEffect(() => {
@@ -64,7 +145,7 @@ const SearchModal = ({
     }
   }, [isOpen]);
 
-  const getResultsByTab = (tabId) => {
+  const getResultsByTab = useCallback((tabId) => {
     const localData = {
       collection: collections,
       resource: resources,
@@ -83,7 +164,7 @@ const SearchModal = ({
         searchMutation.data?.content?.filter((item) => item.type === type) ||
         [];
 
-      return filtered;
+      return dedupeSearchResults(filtered);
     }
 
     // Otherwise, filter the local data and assign correct type
@@ -100,24 +181,46 @@ const SearchModal = ({
       }) || [];
 
     // Ensure items have the correct type based on their data source
-    return items.map((item) => ({
-      ...item,
-      type,
-    }));
-  };
+    return dedupeSearchResults(
+      items.map((item) => ({
+        ...item,
+        type,
+      })),
+    );
+  }, [
+    collections,
+    resources,
+    events,
+    notations,
+    linkGroups,
+    attachments,
+    externalLinks,
+    debouncedQuery,
+    searchMutation.data,
+    searchQuery,
+  ]);
 
-  const filteredResults = getResultsByTab(activeTab);
+  const filteredResults = useMemo(
+    () => getResultsByTab(activeTab),
+    [activeTab, getResultsByTab],
+  );
 
   useEffect(() => {
     if (debouncedQuery && filteredResults.length === 0 && searchMutation.data) {
-      const tabWithResults = TABS.find(
+      const tabWithResults = visibleTabs.find(
         (tab) => getResultsByTab(tab.id).length > 0
       );
       if (tabWithResults) {
         setActiveTab(tabWithResults.id);
       }
     }
-  }, [searchMutation.data, debouncedQuery]);
+  }, [
+    searchMutation.data,
+    debouncedQuery,
+    filteredResults.length,
+    getResultsByTab,
+    visibleTabs,
+  ]);
 
   const handleSearch = (value) => {
     setSearchQuery(value);
@@ -140,6 +243,7 @@ const SearchModal = ({
     const base = {
       id: item.id,
       title: item.title || item.name,
+      name: item.name || item.title,
       description: item.description,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
@@ -147,10 +251,23 @@ const SearchModal = ({
       matchedVia: item.matchedVia,
       matchedChildren: item.matchedChildren,
       resourceId: item.resourceId,
+      url: item.url,
+      notes: item.notes,
+      status: item.status,
+      visibility: item.visibility,
+      collectionId: item.collectionId || item.collection_id,
+      collectionExternalLinkId:
+        item.collectionExternalLinkId || item.collection_external_link_id,
+      sourceCollectionId: item.sourceCollectionId || item.source_collection_id,
+      sourceCollectionName:
+        item.sourceCollectionName || item.source_collection_name,
+      workflowMetadata: item.workflowMetadata || item.workflow_metadata,
       // Include date/time fields
       date: item.date,
-      startTime: item.startTime || item.time,
-      endTime: item.endTime,
+      startDate: item.startDate || item.start_date || item.date,
+      endDate: item.endDate || item.end_date,
+      startTime: item.startTime || item.start_time || item.time,
+      endTime: item.endTime || item.end_time,
       timezone: item.timezone,
     };
 
@@ -164,6 +281,10 @@ const SearchModal = ({
           category: item.category,
           visibility: item.visibility,
           highlighted: item.highlighted,
+          hashtags: item.hashtags,
+          imageUrl: item.imageUrl || item.image_url,
+          imageMetadata: item.imageMetadata || item.image_metadata,
+          whiteboardData: item.whiteboardData || item.whiteboard_data,
         };
       case "collection":
         return {
@@ -313,7 +434,7 @@ const SearchModal = ({
               <div>
                 <DialogTitle className="text-lg sm:text-xl font-semibold flex items-center gap-2">
                   <FaKeyboard className="text-blue-500 hidden sm:inline" />
-                  Search Content
+                  {title}
                 </DialogTitle>
                 <p className="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">
                   Press {getModifierKey()}+P or {getModifierKey()}+K to search •
@@ -332,12 +453,12 @@ const SearchModal = ({
               ref={searchInputRef}
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Search collections, resources, events, attachments, and link groups..."
+              placeholder={placeholder}
               className="w-full mb-4"
             />
 
             <div className="flex flex-wrap gap-2 mb-4">
-              {TABS.map((tab) => {
+              {visibleTabs.map((tab) => {
                 const resultCount = getResultsByTab(tab.id).length;
                 return (
                   <button
@@ -386,9 +507,9 @@ const SearchModal = ({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {filteredResults.map((item) => (
+                  {filteredResults.map((item, index) => (
                     <div
-                      key={`${item.type}-${item.id}`}
+                      key={getSearchResultRenderKey(item, index)}
                       onClick={() => handleSelect(item)}
                       className={`p-3 rounded-lg cursor-pointer transition-colors ${
                         isItemSelected(item)

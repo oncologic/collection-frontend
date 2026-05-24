@@ -75,7 +75,6 @@ export const mockUserSubscription = {
     user: {
       subscriptionPlan: 'explorer',
     },
-    stripeSubscriptionId: null,
     status: 'active',
   },
   usage: {
@@ -87,12 +86,9 @@ export const mockUserSubscription = {
 export const mockValidationResponse = {
   allowed: true,
   changeType: 'upgrade',
-  requiresPayment: true,
   currentPlan: 'explorer',
   targetPlan: 'advocate',
 }
-
-export const mockStripeClientSecret = 'pi_test_secret_123'
 
 export const mockAuthHeader = {
   Authorization: 'Bearer mock-token',

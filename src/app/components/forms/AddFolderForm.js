@@ -122,9 +122,9 @@ const AddFolderForm = ({
             <SelectField
               name="organization_id"
               control={control}
-              label="Organization"
+              label="Business Unit"
               options={organizations}
-              placeholder="Select an organization"
+              placeholder="Select a business unit"
             />
           )}
 

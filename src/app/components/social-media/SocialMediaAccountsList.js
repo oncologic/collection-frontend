@@ -115,7 +115,7 @@ const SocialMediaAccountsList = ({
 
   // Define the desired order for account types
   const accountTypeOrder = [
-    'Foundation/Organization',
+    'Foundation/Business Unit',
     'Healthcare Professional', 
     'Patient Advocate',
     'Personal',
@@ -192,13 +192,13 @@ const SocialMediaAccountsList = ({
       if (filtered.length > 0) {
         tempGroups.push({
           key: 'foundation',
-          name: 'Foundation/Organization',
+          name: 'Foundation/Business Unit',
           sortOrder: 0,
           icon: <FaHospital className="text-gray-500" />,
           accounts: filtered.map(account => ({
             ...account,
             accountType: "foundation",
-            accountTypeLabel: "Foundation/Organization",
+            accountTypeLabel: "Foundation/Business Unit",
             icon: <FaHospital className="text-gray-500" />,
           }))
         });
@@ -207,7 +207,7 @@ const SocialMediaAccountsList = ({
         allAccounts.push({
           ...account,
           accountType: "foundation",
-          accountTypeLabel: "Foundation/Organization",
+          accountTypeLabel: "Foundation/Business Unit",
           icon: <FaHospital className="text-gray-500" />,
         });
       });

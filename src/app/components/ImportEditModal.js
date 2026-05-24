@@ -57,7 +57,7 @@ const ImportEditModal = ({ data, editingType, onSave, onClose }) => {
     const newItem =
       editingType === "organizations"
         ? {
-            name: "New Organization",
+            name: "New Business Unit",
             email: "",
             phone: "",
             website: "",
@@ -118,7 +118,7 @@ const ImportEditModal = ({ data, editingType, onSave, onClose }) => {
             )}
             <h2 className="text-xl font-semibold">
               Edit{" "}
-              {editingType === "organizations" ? "Organizations" : "Resources"}
+              {editingType === "organizations" ? "Business Units" : "Resources"}
             </h2>
           </div>
           <button
@@ -140,7 +140,7 @@ const ImportEditModal = ({ data, editingType, onSave, onClose }) => {
               >
                 <FaPlus className="mr-2" />
                 Add New{" "}
-                {editingType === "organizations" ? "Organization" : "Resource"}
+                {editingType === "organizations" ? "Business Unit" : "Resource"}
               </button>
             </div>
             <div className="p-3 space-y-2">
@@ -183,7 +183,7 @@ const ImportEditModal = ({ data, editingType, onSave, onClose }) => {
                 <h3 className="text-lg font-semibold mb-4">
                   Edit{" "}
                   {editingType === "organizations"
-                    ? "Organization"
+                    ? "Business Unit"
                     : "Resource"}
                 </h3>
 
@@ -215,7 +215,7 @@ const ImportEditModal = ({ data, editingType, onSave, onClose }) => {
                   />
                 </div>
 
-                {/* Organization-specific fields */}
+                {/* Business Unit-specific fields */}
                 {editingType === "organizations" && (
                   <>
                     <div>
@@ -278,7 +278,7 @@ const ImportEditModal = ({ data, editingType, onSave, onClose }) => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Organization
+                        Business Unit
                       </label>
                       <select
                         value={formData.organizationName || ""}
@@ -287,7 +287,7 @@ const ImportEditModal = ({ data, editingType, onSave, onClose }) => {
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        <option value="">Select organization...</option>
+                        <option value="">Select business unit...</option>
                         {editedData.organizations?.map((org, index) => (
                           <option key={index} value={org.name}>
                             {org.name}

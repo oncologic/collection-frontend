@@ -396,7 +396,7 @@ export default function ChatPrompt({
       });
       setFilteredCollections(updatedCollections);
     }
-  }, [parsedCollections]);
+  }, [parsedCollections, setFilteredCollections]);
 
   // Update the effect to handle automatic selection and visibility
   useEffect(() => {

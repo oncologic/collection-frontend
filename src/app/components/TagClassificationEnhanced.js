@@ -5,7 +5,6 @@ import {
   FaList,
   FaCalendar,
   FaTimes,
-  FaGoogle,
   FaExternalLinkAlt,
 } from "react-icons/fa";
 import DOMPurify from "dompurify";
@@ -54,11 +53,9 @@ const TagClassificationEnhanced = ({
   title = "Tag Classification",
   className = "",
   events = [], // All events passed from parent
-  showGoogleCalendarEvents = false,
   showPublicOnly = false,
   showRegularEvents = true,
   isCollectionContext = true, // Use this to know if we should show the toggle
-  onGoogleCalendarToggle,
   onPublicOnlyToggle,
   onRegularEventsToggle,
 }) => {
@@ -124,11 +121,6 @@ const TagClassificationEnhanced = ({
 
     let filtered = [...events];
 
-    // Apply Google Calendar filter
-    if (!showGoogleCalendarEvents) {
-      filtered = filtered.filter((event) => !event.isGoogleCalendarEvent);
-    }
-
     // Apply public only filter
     if (showPublicOnly) {
       filtered = filtered.filter((event) => event.visibility === "public");
@@ -158,7 +150,6 @@ const TagClassificationEnhanced = ({
     events,
     highlightedTags,
     tagFilterMode,
-    showGoogleCalendarEvents,
     showPublicOnly,
   ]);
 
@@ -281,22 +272,6 @@ const TagClassificationEnhanced = ({
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={showGoogleCalendarEvents}
-                onChange={(e) =>
-                  onGoogleCalendarToggle &&
-                  onGoogleCalendarToggle(e.target.checked)
-                }
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-600 flex items-center gap-1">
-                <FaGoogle className="text-blue-500" />
-                Include Google Calendar
-              </span>
-            </label>
-
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
                 checked={!showPublicOnly}
                 onChange={(e) =>
                   onPublicOnlyToggle && onPublicOnlyToggle(!e.target.checked)
@@ -308,7 +283,7 @@ const TagClassificationEnhanced = ({
               </span>
             </label>
 
-            {/* Show organization events toggle when in collection context */}
+            {/* Show business unit events toggle when in collection context */}
             {isCollectionContext && (
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -321,7 +296,7 @@ const TagClassificationEnhanced = ({
                   className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                 />
                 <span className="text-sm text-gray-600">
-                  Include Organization Events
+                  Include Business Unit Events
                 </span>
               </label>
             )}
@@ -448,14 +423,6 @@ const TagClassificationEnhanced = ({
                                     >
                                       {event.status.charAt(0).toUpperCase() +
                                         event.status.slice(1).toLowerCase()}
-                                    </span>
-                                  )}
-
-                                  {/* Google Calendar Badge */}
-                                  {event.isGoogleCalendarEvent && (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
-                                      <FaGoogle size={10} />
-                                      Google
                                     </span>
                                   )}
 

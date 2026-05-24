@@ -158,6 +158,7 @@ const BulkNotationImport = ({ collectionId, externalLinkId, onComplete }) => {
     let successful = 0;
     let failed = 0;
     const failedItems = [];
+    const successfulItems = [];
 
     for (let i = 0; i < previewData.notations.length; i++) {
       const notation = previewData.notations[i];
@@ -170,24 +171,27 @@ const BulkNotationImport = ({ collectionId, externalLinkId, onComplete }) => {
         // Resolve tags from names to objects with IDs
         const resolvedTags = resolveTags(notation.tags);
 
+        const notationData = {
+          title: notation.title,
+          notes: notation.content,
+          category: notation.category || "Action",
+          status: notation.status || "Pending",
+          date: notation.date || null,
+          startTime: notation.startTime || null,
+          endTime: notation.endTime || null,
+          timezone: notation.timezone || null,
+          visibility: notation.visibility || "private",
+          highlighted: notation.highlighted || false,
+          tags: resolvedTags, // Use resolved tags
+          customFields: notation.customFields || {},
+        };
+
         await addNotation.mutateAsync({
           collectionId,
           externalLinkId,
-          notationData: {
-            title: notation.title,
-            notes: notation.content,
-            category: notation.category || "Action",
-            status: notation.status || "Pending",
-            date: notation.date || null,
-            startTime: notation.startTime || null,
-            endTime: notation.endTime || null,
-            timezone: notation.timezone || null,
-            visibility: notation.visibility || "private",
-            highlighted: notation.highlighted || false,
-            tags: resolvedTags, // Use resolved tags
-            customFields: notation.customFields || {},
-          },
+          notationData,
         });
+        successfulItems.push(notationData);
         successful++;
       } catch (error) {
         console.error(`Failed to import notation ${i + 1}:`, error);
@@ -215,7 +219,7 @@ const BulkNotationImport = ({ collectionId, externalLinkId, onComplete }) => {
     }
 
     if (onComplete) {
-      onComplete({ successful, failed, failedItems });
+      onComplete({ successful, failed, failedItems, successfulItems });
     }
 
     // Hide component after successful import (can be re-expanded if needed)

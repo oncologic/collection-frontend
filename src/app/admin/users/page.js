@@ -37,6 +37,7 @@ export default function AdminUsersPage() {
   const [selectedUserToEdit, setSelectedUserToEdit] = useState(null);
   const [creditModalOpen, setCreditModalOpen] = useState(false);
   const [selectedUserForCredits, setSelectedUserForCredits] = useState(null);
+  const [creditMode, setCreditMode] = useState("set");
   const [creditAmount, setCreditAmount] = useState("");
   const [creditDescription, setCreditDescription] = useState("");
   const [userBalance, setUserBalance] = useState(null);
@@ -56,7 +57,8 @@ export default function AdminUsersPage() {
   });
 
   // Get auth functions and user data first
-  const { getUserBalance, addCreditsToUserAccount } = useCredits();
+  const { getUserBalance, addCreditsToUserAccount, setUserCreditBalance } =
+    useCredits();
   const { getAuthHeader, systemUser, isAdmin, isSuperuser } = useContextAuth();
   const { getToken } = useAuth();
 
@@ -271,6 +273,7 @@ export default function AdminUsersPage() {
     async (user) => {
       setSelectedUserForCredits(user);
       setCreditModalOpen(true);
+      setCreditMode("set");
       setCreditAmount("");
       setCreditDescription("");
       setUserBalance(null);
@@ -314,6 +317,40 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleSetCredits = async () => {
+    if (!selectedUserForCredits || creditAmount === "" || creditAmount < 0) {
+      toast.error("Please enter a valid credit amount");
+      return;
+    }
+
+    try {
+      await setUserCreditBalance.mutateAsync({
+        userId: selectedUserForCredits.id,
+        amount: parseInt(creditAmount),
+        description: creditDescription || "Admin credit balance adjustment",
+      });
+
+      const balanceData = await getUserBalance.mutateAsync({
+        userId: selectedUserForCredits.id,
+      });
+      setUserBalance(balanceData.balance);
+
+      setCreditAmount("");
+      setCreditDescription("");
+    } catch (error) {
+      console.error("Failed to set credits:", error);
+    }
+  };
+
+  const handleSaveCredits = () => {
+    if (creditMode === "set") {
+      handleSetCredits();
+      return;
+    }
+
+    handleAddCredits();
+  };
+
   const roleOptions = useMemo(
     () => [
       { id: "patient", name: "Patient" },
@@ -324,7 +361,7 @@ export default function AdminUsersPage() {
       { id: "rn", name: "Registered Nurse" },
       { id: "researcher", name: "Researcher" },
       { id: "advocate", name: "Patient Advocate" },
-      { id: "foundation", name: "Foundation/Organization Staff" },
+      { id: "foundation", name: "Foundation/Business Unit Staff" },
       { id: "admin", name: "Admin" },
     ],
     []
@@ -441,7 +478,7 @@ export default function AdminUsersPage() {
               onClick={() => handleManageCredits(row.original)}
               className="px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-all duration-200 border border-green-200 hover:border-green-300"
             >
-              Credits
+              Tokens
             </button>
             <button
               onClick={() => handleDeleteUser(row.original)}
@@ -552,7 +589,7 @@ export default function AdminUsersPage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">
-                    Manage Credits
+                    Manage Token Credits
                   </h2>
                   <p className="text-sm text-gray-500 truncate">
                     {selectedUserForCredits?.email}
@@ -592,15 +629,51 @@ export default function AdminUsersPage() {
               <div className="space-y-6">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Credits to Add
+                    Adjustment Type
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setCreditMode("set")}
+                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                        creditMode === "set"
+                          ? "bg-white text-gray-900 shadow-sm"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      Set Balance
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreditMode("add")}
+                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                        creditMode === "add"
+                          ? "bg-white text-gray-900 shadow-sm"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      Add Credits
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    {creditMode === "set"
+                      ? "New Credit Balance"
+                      : "Credits to Add"}
                   </label>
                   <input
                     type="number"
-                    min="1"
+                    min={creditMode === "set" ? "0" : "1"}
                     value={creditAmount}
                     onChange={(e) => setCreditAmount(e.target.value)}
                     className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 text-lg font-medium"
-                    placeholder="Enter number of credits"
+                    placeholder={
+                      creditMode === "set"
+                        ? "Enter total allowed credits"
+                        : "Enter number of credits"
+                    }
                   />
                 </div>
 
@@ -623,21 +696,26 @@ export default function AdminUsersPage() {
 
               <div className="flex gap-4 mt-8">
                 <button
-                  onClick={handleAddCredits}
+                  onClick={handleSaveCredits}
                   disabled={
+                    creditAmount === "" ||
                     !creditAmount ||
-                    creditAmount <= 0 ||
-                    addCreditsToUserAccount.isPending
+                    (creditMode === "set"
+                      ? creditAmount < 0
+                      : creditAmount <= 0) ||
+                    addCreditsToUserAccount.isPending ||
+                    setUserCreditBalance.isPending
                   }
                   className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-4 rounded-xl font-semibold hover:from-green-600 hover:to-green-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
-                  {addCreditsToUserAccount.isPending ? (
+                  {addCreditsToUserAccount.isPending ||
+                  setUserCreditBalance.isPending ? (
                     <span className="flex items-center justify-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      Adding Credits...
+                      Saving...
                     </span>
                   ) : (
-                    "Add Credits"
+                    creditMode === "set" ? "Set Balance" : "Add Credits"
                   )}
                 </button>
                 <button
@@ -667,7 +745,7 @@ export default function AdminUsersPage() {
                 User Management
               </h1>
               <p className="text-gray-600">
-                Manage user accounts, roles, and credits
+                Manage user accounts, roles, and token credits
               </p>
             </div>
             <div className="mt-4 sm:mt-0">

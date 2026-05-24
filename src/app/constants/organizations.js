@@ -1,1 +1,4 @@
-export const UNASSIGNED_ORGANIZATION_ID = "unassigned";
+export {
+  UNASSIGNED_BUSINESS_UNIT_ID,
+  UNASSIGNED_BUSINESS_UNIT_ID as UNASSIGNED_ORGANIZATION_ID,
+} from "./businessUnits";

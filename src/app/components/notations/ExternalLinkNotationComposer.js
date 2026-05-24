@@ -287,11 +287,21 @@ const buildPayload = (
   templateId: draft.templateId || null,
 });
 
+const withNotationContext = (payload, notation) => ({
+  ...payload,
+  collectionExternalLinkId:
+    notation?.collectionExternalLinkId ||
+    notation?.collection_external_link_id ||
+    "",
+  collectionId: notation?.collectionId || notation?.collection_id || "",
+});
+
 const ExternalLinkNotationComposer = ({
   notation,
   externalLinkId,
   isCollaborator = false,
   isNewDraft = false,
+  onNotationSaved,
   onClose,
 }) => {
   const queryClient = useQueryClient();
@@ -354,7 +364,7 @@ const ExternalLinkNotationComposer = ({
         customFieldDefinitions,
         customFieldValues,
       },
-      { silent = true } = {}
+      { silent = true, checkDateExpansion = false } = {}
     ) => {
       const nextDraft = nextState?.draft;
       if (!nextDraft?.id || isPersistingRef.current) {
@@ -369,6 +379,9 @@ const ExternalLinkNotationComposer = ({
       const signature = JSON.stringify(payload);
 
       if (signature === lastSavedSignatureRef.current) {
+        if (checkDateExpansion) {
+          await onNotationSaved?.(withNotationContext(payload, notation));
+        }
         return;
       }
 
@@ -381,6 +394,10 @@ const ExternalLinkNotationComposer = ({
         lastSavedSignatureRef.current = signature;
         setSaveStatus("saved");
         invalidateNoteQueries();
+
+        if (checkDateExpansion) {
+          await onNotationSaved?.(withNotationContext(payload, notation));
+        }
 
         if (!silent) {
           toast.success("Note saved");
@@ -402,6 +419,8 @@ const ExternalLinkNotationComposer = ({
       draft,
       getAuthHeader,
       invalidateNoteQueries,
+      notation,
+      onNotationSaved,
     ]
   );
 
@@ -675,10 +694,11 @@ const ExternalLinkNotationComposer = ({
                   customFieldDefinitions,
                   customFieldValues,
                 },
-                { silent: false }
+                { silent: false, checkDateExpansion: true }
               )
             }
-            className="inline-flex items-center gap-2 rounded-lg bg-[#4263EB] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3b5bd9]"
+            disabled={saveStatus === "saving"}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#4263EB] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3b5bd9] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <FaCheck />
             Save

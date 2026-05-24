@@ -261,14 +261,14 @@ const AddSurveyForm = ({
 
           {/* Questions Section */}
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Organizations</h2>
+            <h2 className="text-xl font-semibold">Business Units</h2>
             <div className="flex flex-col space-y-2">
               <MultiSelect
                 id="organizations"
                 name="organizations"
-                label="Organizations"
+                label="Business Units"
                 required={true}
-                placeholder="Select organizations"
+                placeholder="Select business units"
                 options={organizations}
                 value={selectedOrganizations}
                 onChange={handleOrganizationsChange}

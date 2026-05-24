@@ -4,6 +4,7 @@ import { useContextAuth } from "../context/authContext";
 import toast from "react-hot-toast";
 import {
   createAttachment,
+  createAttachmentViaDirectUpload,
   deleteAttachment,
   searchAttachments,
   updateAttachment,
@@ -33,7 +34,7 @@ export function useCreateAttachment() {
           throw new Error("No file selected for upload");
         }
 
-        return createAttachment(payload, token, headers);
+        return createAttachmentViaDirectUpload(payload, token, headers);
       } else {
         // Handle search selection case
         const {
@@ -56,7 +57,7 @@ export function useCreateAttachment() {
             highlighted,
           },
           token,
-          headers
+          headers,
         );
       }
     },
@@ -94,7 +95,7 @@ export function useDeleteAttachment() {
         token,
         headers,
         externalLinkId,
-        resourceId
+        resourceId,
       );
     },
     onSuccess: () => {
@@ -114,7 +115,10 @@ export function useDeleteAttachment() {
 export function useSearchAttachments(query) {
   const { getToken } = useAuth();
   const { selectedTenants } = useContextAuth();
-  const tenantScopeKey = selectedTenants.map((tenant) => tenant.id).sort().join(",");
+  const tenantScopeKey = selectedTenants
+    .map((tenant) => tenant.id)
+    .sort()
+    .join(",");
 
   return useQuery({
     queryKey: ["attachments", "search", tenantScopeKey, query],

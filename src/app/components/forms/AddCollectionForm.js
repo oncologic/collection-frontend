@@ -30,7 +30,7 @@ const COLLECTION_TYPES = [
   { id: "resource", label: "Resource" },
   { id: "sponsor", label: "Sponsor" },
   { id: "event", label: "Event" },
-  { id: "organization", label: "Organization" },
+  { id: "organization", label: "Business Unit" },
   { id: "mixed", label: "Mixed" },
 ];
 
@@ -88,6 +88,17 @@ const STATUS_OPTIONS_FORMATTED = STATUS_OPTIONS.map(({ id, label }) => ({
   id,
   name: label,
 }));
+
+const isTemplateCollection = (collection = {}) => {
+  const metadata = collection.workflowMetadata || collection.workflow_metadata || {};
+  const kind = String(metadata.kind || "").toLowerCase();
+  return (
+    kind === "template" ||
+    kind === "workflow_template" ||
+    collection.type === "workflow_template" ||
+    metadata.templateEnabled === true
+  );
+};
 
 const COLORS_OPTIONS = COLORS.map(({ id, label }) => ({
   id,
@@ -258,6 +269,9 @@ const AddCollectionForm = ({
   );
   const [eventOptions, setEventOptions] = useState([]);
   const [isPinned, setIsPinned] = useState(initialValues.isPinned || false);
+  const [isTemplate, setIsTemplate] = useState(
+    isTemplateCollection(initialValues)
+  );
   const [collectionHashtags, setCollectionHashtags] = useState(
     initialValues.hashtags || []
   );
@@ -332,6 +346,21 @@ const AddCollectionForm = ({
   }, [events, initialValues.eventId, setValue]);
 
   const onSubmitWrapper = async (data) => {
+    const workflowMetadata = {
+      ...(initialValues.workflowMetadata || initialValues.workflow_metadata || {}),
+    };
+
+    if (isTemplate) {
+      workflowMetadata.kind = "template";
+      workflowMetadata.templateEnabled = true;
+    } else {
+      const kind = String(workflowMetadata.kind || "").toLowerCase();
+      if (kind === "template" || kind === "workflow_template") {
+        delete workflowMetadata.kind;
+      }
+      delete workflowMetadata.templateEnabled;
+    }
+
     const formData = {
       ...data,
       description,
@@ -348,6 +377,7 @@ const AddCollectionForm = ({
       organization_id: data.organization_id || "",
       collection_type: data.collection_type || "user",
       hashtags: collectionHashtags,
+      workflowMetadata,
     };
     await onSubmit(formData);
   };
@@ -425,6 +455,25 @@ const AddCollectionForm = ({
               </label>
             </div>
           </div>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-blue-100 bg-blue-50/60 p-3">
+            <input
+              type="checkbox"
+              checked={isTemplate}
+              onChange={(e) => setIsTemplate(e.target.checked)}
+              className="mt-1 h-5 w-5 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="min-w-0">
+              <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                Use as template
+                <FaInfoCircle className="h-3.5 w-3.5 text-blue-500" />
+              </span>
+              <span className="mt-1 block text-sm leading-5 text-gray-600">
+                Template collections let the collection builder copy selected
+                external links into new collections with their details intact.
+              </span>
+            </span>
+          </label>
 
           {/* Collection Type Selection */}
           <Controller
@@ -553,7 +602,7 @@ const AddCollectionForm = ({
             <SelectField
               name="organization_id"
               control={control}
-              label="Organization"
+              label="Business Unit"
               options={organizations}
               placeholder="Select an organization"
             />

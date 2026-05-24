@@ -19,6 +19,31 @@ import {
 import { useContextAuth } from "../context/authContext";
 import toast from "react-hot-toast";
 
+const normalizePlatformName = (name) =>
+  String(name || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+const upsertPlatformByName = (existing = [], platform) => {
+  if (!platform?.id) {
+    return existing;
+  }
+
+  const platformName = normalizePlatformName(platform.name);
+  const remaining = existing.filter((item) => {
+    if (item.id === platform.id) {
+      return false;
+    }
+
+    return normalizePlatformName(item.name) !== platformName;
+  });
+
+  return [...remaining, platform].sort((a, b) =>
+    (a.name || "").localeCompare(b.name || ""),
+  );
+};
+
 export const useSocialMediaPosts = (options = {}) => {
   const { selectedTenants, getAuthHeader, systemUser } = useContextAuth();
   const { enabled = true, ...queryOptions } = options;
@@ -128,29 +153,11 @@ export const useCreateSocialMediaPlatform = (options = {}) => {
     onSuccess: (platform) => {
       queryClient.setQueryData(
         ["socialMediaPlatforms", selectedTenantIds],
-        (existing = []) => {
-          const hasPlatform = existing.some((item) => item.id === platform.id);
-          if (hasPlatform) {
-            return existing;
-          }
-
-          return [...existing, platform].sort((a, b) =>
-            (a.name || "").localeCompare(b.name || "")
-          );
-        }
+        (existing = []) => upsertPlatformByName(existing, platform),
       );
       queryClient.setQueryData(
         ["socialMediaPlatformCatalog", selectedTenantIds],
-        (existing = []) => {
-          const hasPlatform = existing.some((item) => item.id === platform.id);
-          if (hasPlatform) {
-            return existing;
-          }
-
-          return [...existing, platform].sort((a, b) =>
-            (a.name || "").localeCompare(b.name || "")
-          );
-        }
+        (existing = []) => upsertPlatformByName(existing, platform),
       );
       toast.success(`Platform ${platform.name} is ready to use`);
       queryClient.invalidateQueries({ queryKey: ["socialMediaPlatforms"] });

@@ -1,6 +1,6 @@
 import { useRef, useEffect } from "react";
 import { DateTime } from "luxon";
-import { FaClock, FaGoogle } from "react-icons/fa";
+import { FaClock } from "react-icons/fa";
 
 // Check if event has time information
 export const hasTimeInfo = (event) => {
@@ -302,16 +302,12 @@ const CalendarView = ({
               const isWaiting = status === "waiting";
               const isCancelled = status === "cancelled";
 
-              // Color based on type and source
+              // Color based on type
               let bgColor = "bg-gray-100";
               let textColor = "text-gray-800";
               let borderColor = "border-gray-300";
 
-              if (event.isGoogleCalendarEvent) {
-                bgColor = "bg-blue-50";
-                textColor = "text-blue-800";
-                borderColor = "border-blue-300";
-              } else if (event.type === "external_link") {
+              if (event.type === "external_link") {
                 bgColor = "bg-indigo-50";
                 textColor = "text-indigo-800";
                 borderColor = "border-indigo-200";
@@ -341,7 +337,6 @@ const CalendarView = ({
                   onClick={() => onEventClick && onEventClick(event)}
                 >
                   <div className="font-medium truncate flex items-center gap-1">
-                    {event.isGoogleCalendarEvent && <FaGoogle size={10} className="flex-shrink-0" />}
                     {event.title || event.name}
                   </div>
                   <div className="text-xs opacity-75 truncate flex items-center gap-1">
@@ -368,16 +363,13 @@ const CalendarView = ({
                     key={event.id + (event.notationId || "")}
                     onClick={() => onEventClick && onEventClick(event)}
                     className={`px-2 py-1 rounded-md text-xs flex items-center gap-1 ${
-                      event.isGoogleCalendarEvent
-                        ? "bg-blue-100 text-blue-700"
-                        : event.type === "external_link"
+                      event.type === "external_link"
                         ? "bg-indigo-100 text-indigo-700"
                         : event.type === "notation"
                         ? "bg-purple-100 text-purple-700"
                         : "bg-gray-100 text-gray-700"
                     } hover:opacity-80 truncate max-w-full`}
                   >
-                    {event.isGoogleCalendarEvent && <FaGoogle size={10} />}
                     <span className="truncate">{event.title || event.name}</span>
                   </button>
                 ))}

@@ -151,7 +151,7 @@ const UserProfileModal = ({ isOpen, onClose, onSubmit, urlParams }) => {
     },
     {
       id: "organizations",
-      name: "Organizations to learn more about",
+      name: "Business Units to learn more about",
       icon: <FaBuilding className="text-indigo-500" />,
     },
     {
@@ -384,7 +384,7 @@ const UserProfileModal = ({ isOpen, onClose, onSubmit, urlParams }) => {
         data.perspective?.name === "I" ? "me" : "them"
       }? *Important: Limit to 5 items or less and one or two sentences for each item. ${
         isRareSubtype
-          ? `Since ${data.diagnosisType?.name.toLowerCase()} is a less common subtype, pay close attention to the type of kidney cancer when recommending resources and recommend at least one organizations that specializes in this subtype of kidney cancer if one exists.`
+          ? `Since ${data.diagnosisType?.name.toLowerCase()} is a less common subtype, pay close attention to the type of kidney cancer when recommending resources and recommend at least one business unit that specializes in this subtype of kidney cancer if one exists.`
           : ""
       } \n\n`;
     }

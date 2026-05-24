@@ -14,8 +14,8 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        source: '/api-proxy/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002'}/:path*`,
+        source: "/api-proxy/:path*",
+        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002"}/:path*`,
       },
     ];
   },
@@ -36,6 +36,18 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "mrc-file-uploads.s3.us-east-2.amazonaws.com",
+      },
+      {
+        protocol: "https",
+        hostname: "*.blob.core.windows.net",
+      },
+      {
+        protocol: "https",
+        hostname: "*.azureedge.net",
+      },
+      {
+        protocol: "https",
+        hostname: "*.azurefd.net",
       },
       {
         protocol: "https",

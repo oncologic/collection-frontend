@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { marked } from "marked";
 import {
   FaCheck,
@@ -25,6 +25,7 @@ const EventExportModal = ({ isOpen, onClose, event, resources, isAdmin = false }
   const [searchMode, setSearchMode] = useState("resources"); // "resources" or "notations"
   const [showAttachmentBrowser, setShowAttachmentBrowser] = useState(false);
   const [hidePrivateItems, setHidePrivateItems] = useState(false);
+  const generatePromptContentRef = useRef(null);
 
   useEffect(() => {
     if (isOpen && event) {
@@ -46,14 +47,14 @@ const EventExportModal = ({ isOpen, onClose, event, resources, isAdmin = false }
       setSelectedResources(resources.map((r) => r.id));
 
       // Generate initial prompt content
-      generatePromptContent(initialResourceOptions);
+      generatePromptContentRef.current?.(initialResourceOptions);
     }
   }, [isOpen, event, resources]);
 
   // Update prompt content whenever resource options change
   useEffect(() => {
     if (resourceOptions.length > 0) {
-      generatePromptContent(resourceOptions);
+      generatePromptContentRef.current?.(resourceOptions);
     }
   }, [resourceOptions]);
 
@@ -182,6 +183,7 @@ const EventExportModal = ({ isOpen, onClose, event, resources, isAdmin = false }
 
     setPromptContent(prompt);
   };
+  generatePromptContentRef.current = generatePromptContent;
 
   // Convert HTML to Markdown to preserve formatting
   const htmlToMarkdown = (html) => {

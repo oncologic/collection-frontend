@@ -19,15 +19,8 @@ import {
   FaQuestionCircle,
   FaChevronDown,
   FaFileAlt,
-  FaDatabase,
-  FaClipboardList,
-  FaBrain,
   FaSpinner,
 } from "react-icons/fa";
-import { useCredits } from "../hooks/useAI";
-import { StripeProvider } from "../providers/StripeProvider";
-import { CheckoutForm } from "../components/payments/CheckoutForm";
-import { SubscriptionCheckoutForm } from "../components/payments/SubscriptionCheckoutForm";
 import DowngradeCleanupModal from "../components/DowngradeCleanupModal";
 import PlanChangeConfirmationModal from "../components/PlanChangeConfirmationModal";
 import toast from "react-hot-toast";
@@ -35,33 +28,20 @@ import { useUser, SignUpButton } from "@clerk/nextjs";
 import {
   useSubscriptionPlans,
   useUserSubscription,
-  useUpdateSubscription,
-  useCreateStripeSubscription,
   useValidatePlanChange,
   useChangeSubscriptionPlan,
-  useDowngradeCleanupSuggestions,
 } from "../hooks/useSubscription";
 import {
-  validatePlanChange,
-  getPlanChangeConfirmation,
   hasPendingSubscriptionChanges,
   getEffectivePlan,
   formatValidationError,
   requiresCleanup,
-  getCleanupSummary,
-  requiresStripePayment,
-  getPlanChangeConfirmationFromValidation,
 } from "../utils/subscriptionHelpers";
 
 const PricingPageContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isAuthenticated, systemUser, selectedTenants } = useContextAuth();
-  const [billingCycle, setBillingCycle] = useState("monthly");
-  const [showCheckout, setShowCheckout] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState(null);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [clientSecret, setClientSecret] = useState(null);
+  const { selectedTenants } = useContextAuth();
   const [activeTenant, setActiveTenant] = useState(null);
   const [showTenantDropdown, setShowTenantDropdown] = useState(false);
   const [showCleanupModal, setShowCleanupModal] = useState(false);
@@ -69,7 +49,6 @@ const PricingPageContent = () => {
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [confirmationData, setConfirmationData] = useState(null);
   const [pricingType, setPricingType] = useState("kidney");
-  const { createCheckoutSession } = useCredits();
   const { user } = useUser();
 
   // Backend subscription hooks
@@ -82,30 +61,9 @@ const PricingPageContent = () => {
   const { data: userSubscription, isLoading: isLoadingUserSubscription } =
     useUserSubscription();
 
-  const updateSubscription = useUpdateSubscription({
-    onSuccess: () => {
-      setShowCheckout(false);
-      setSelectedPlan(null);
-      router.push("/dashboard");
-    },
-  });
-
-  const createStripeSubscription = useCreateStripeSubscription({
-    onSuccess: (data) => {
-      setClientSecret(data.clientSecret);
-      setShowPaymentModal(true);
-    },
-    onError: (error) => {
-      setSelectedPlan(null);
-      toast.error("Failed to initialize subscription payment");
-    },
-  });
-
   const validatePlanChangeMutation = useValidatePlanChange();
   const changeSubscriptionPlanMutation = useChangeSubscriptionPlan({
     onSuccess: () => {
-      setShowCheckout(false);
-      setSelectedPlan(null);
       router.push("/dashboard");
     },
   });
@@ -245,30 +203,9 @@ const PricingPageContent = () => {
     setShowConfirmationModal(false);
     setConfirmationData(null);
 
-    // Handle free plans
-    if (
-      plan.id === "explorer" ||
-      plan.id === "basic" ||
-      plan.monthlyPrice === 0
-    ) {
-      changeSubscriptionPlanMutation.mutate({
-        planName: plan.id,
-      });
-      return;
-    }
-
-    // For upgrades that require Stripe payment, use the create subscription flow
-    if (requiresStripePayment(validation)) {
-      setSelectedPlan(plan);
-      createStripeSubscription.mutate({
-        planName: plan.id,
-      });
-    } else {
-      // For downgrades or plan changes that don't require new payment
-      changeSubscriptionPlanMutation.mutate({
-        planName: plan.id,
-      });
-    }
+    changeSubscriptionPlanMutation.mutate({
+      planName: plan.id,
+    });
   };
 
   // Fallback plans if backend is not available
@@ -431,7 +368,7 @@ const PricingPageContent = () => {
       ? fallbackKidneyPlans
       : fallbackPersonalPlans;
 
-  // Enhanced plan selection handler with backend validation and duplicate payment prevention
+  // Enhanced plan selection handler with backend validation
   const handlePlanSelect = async (plan) => {
     if (!user) {
       // For non-authenticated users, redirect to sign-in page with plan information
@@ -516,17 +453,6 @@ const PricingPageContent = () => {
       return plan.monthlyPrice;
     }
     return plan.monthlyPrice;
-  };
-
-  const handleSubscriptionSuccess = () => {
-    setShowCheckout(false);
-    setSelectedPlan(null);
-    router.push("/dashboard");
-  };
-
-  const handleCancelCheckout = () => {
-    setShowCheckout(false);
-    setSelectedPlan(null);
   };
 
   // Show loading state
@@ -702,15 +628,12 @@ const PricingPageContent = () => {
                       Subscription Changes Pending
                     </h3>
                     <p className="text-sm text-orange-700">
-                      You have pending subscription changes that will take
-                      effect at the end of your current billing period. You
-                      cannot make additional plan changes until these are
-                      processed.
+                      You have pending subscription changes. You cannot make
+                      additional plan changes until these are processed.
                     </p>
                     {userSubscription.subscription?.cancel_at_period_end && (
                       <p className="text-sm text-orange-700 mt-2">
-                        Your subscription will change at the end of your current
-                        billing period on{" "}
+                        Your subscription will change on{" "}
                         {new Date(
                           userSubscription.subscription.current_period_end *
                             1000
@@ -759,18 +682,15 @@ const PricingPageContent = () => {
               }
 
               if (
-                updateSubscription.isPending ||
-                createStripeSubscription.isPending ||
                 validatePlanChangeMutation.isPending ||
                 changeSubscriptionPlanMutation.isPending
               ) {
                 const config = {
                   text: validatePlanChangeMutation.isPending
                     ? "Validating..."
-                    : updateSubscription.isPending ||
-                      changeSubscriptionPlanMutation.isPending
+                    : changeSubscriptionPlanMutation.isPending
                     ? "Updating..."
-                    : "Preparing payment...",
+                    : "Working...",
                   disabled: true,
                   className: "bg-gray-300 text-gray-500 cursor-not-allowed",
                   icon: (
@@ -1124,7 +1044,7 @@ const PricingPageContent = () => {
                   {
                     question: "Can I change plans at any time?",
                     answer:
-                      "Yes, you can upgrade or downgrade your plan at any time. Changes take effect immediately, and billing is prorated.",
+                      "Yes, admins can upgrade or downgrade plans at any time. Changes take effect immediately.",
                   },
                   {
                     question: "How does the free Explorer plan work?",
@@ -1132,7 +1052,7 @@ const PricingPageContent = () => {
                       "The Explorer plan gives you access to basic features including 5 AI chat questions per month, up to 3 collections, and full access to clinical trials search and community features.",
                   },
                   {
-                    question: "How does AI chat billing work?",
+                    question: "How do AI chat limits work?",
                     answer:
                       "AI chat questions are included in your plan limits. The Explorer plan includes 5 questions per month, Advocate includes 100, and Professional and Research plans include unlimited questions.",
                   },
@@ -1156,7 +1076,7 @@ const PricingPageContent = () => {
                   {
                     question: "Can I change plans at any time?",
                     answer:
-                      "Yes, you can upgrade or downgrade your plan at any time. Changes take effect immediately, and billing is prorated.",
+                      "Yes, admins can upgrade or downgrade plans at any time. Changes take effect immediately.",
                   },
                   {
                     question: "How does the free Explorer plan work?",
@@ -1164,7 +1084,7 @@ const PricingPageContent = () => {
                       "The Explorer plan gives you access to basic features including 5 AI chat questions per month, up to 3 collections, and full access to content search and document integration.",
                   },
                   {
-                    question: "How does AI chat billing work?",
+                    question: "How do AI chat limits work?",
                     answer:
                       "AI chat questions are included in your plan limits. The Explorer plan includes 5 questions per month, Personal includes 100, and Professional and Enterprise plans include unlimited questions.",
                   },
@@ -1216,48 +1136,6 @@ const PricingPageContent = () => {
         </div>
       </div>
 
-      {/* Payment Modal */}
-      {showPaymentModal && selectedPlan && clientSecret && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">
-                Subscribe to {selectedPlan.name}
-              </h3>
-              <button
-                onClick={() => {
-                  setShowPaymentModal(false);
-                  setSelectedPlan(null);
-                  setClientSecret(null);
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <FaTimes className="w-5 h-5" />
-              </button>
-            </div>
-
-            <StripeProvider clientSecret={clientSecret}>
-              <SubscriptionCheckoutForm
-                planName={selectedPlan.id}
-                planPrice={getPrice(selectedPlan)}
-                planDisplayName={selectedPlan.name}
-                onSuccess={() => {
-                  setShowPaymentModal(false);
-                  setSelectedPlan(null);
-                  setClientSecret(null);
-                  router.push("/dashboard");
-                }}
-                onCancel={() => {
-                  setShowPaymentModal(false);
-                  setSelectedPlan(null);
-                  setClientSecret(null);
-                }}
-              />
-            </StripeProvider>
-          </div>
-        </div>
-      )}
-
       {showCleanupModal && cleanupData && (
         <DowngradeCleanupModal
           isOpen={showCleanupModal}
@@ -1280,10 +1158,7 @@ const PricingPageContent = () => {
           onConfirm={confirmationData.onConfirm}
           validation={confirmationData.validation}
           targetPlan={confirmationData.targetPlan}
-          isLoading={
-            changeSubscriptionPlanMutation.isPending ||
-            createStripeSubscription.isPending
-          }
+          isLoading={changeSubscriptionPlanMutation.isPending}
         />
       )}
     </div>

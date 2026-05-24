@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { DateTime } from "luxon";
 import TimeSlotPicker from "./TimeSlotPicker";
-import { FaCopy, FaTimes, FaCalendarAlt, FaInfoCircle, FaGoogle } from "react-icons/fa";
+import { FaCopy, FaTimes, FaCalendarAlt, FaInfoCircle } from "react-icons/fa";
 
 const AvailabilityComposer = ({ selectedDates, onClose, allEvents = [] }) => {
   const [dayAvailability, setDayAvailability] = useState({});
@@ -14,19 +14,27 @@ const AvailabilityComposer = ({ selectedDates, onClose, allEvents = [] }) => {
   const [snippetText, setSnippetText] = useState("");
 
   // Sort dates chronologically
-  const sortedDates = [...selectedDates].sort((a, b) => a - b);
+  const sortedDates = useMemo(
+    () => [...selectedDates].sort((a, b) => a - b),
+    [selectedDates]
+  );
 
   // Initialize availability for each selected date
   useEffect(() => {
-    const initialAvailability = {};
-    sortedDates.forEach((date) => {
-      const dateStr = date.toISODate();
-      if (!dayAvailability[dateStr]) {
-        initialAvailability[dateStr] = [];
-      }
+    setDayAvailability((prev) => {
+      const initialAvailability = {};
+      sortedDates.forEach((date) => {
+        const dateStr = date.toISODate();
+        if (!prev[dateStr]) {
+          initialAvailability[dateStr] = [];
+        }
+      });
+
+      return Object.keys(initialAvailability).length > 0
+        ? { ...prev, ...initialAvailability }
+        : prev;
     });
-    setDayAvailability((prev) => ({ ...prev, ...initialAvailability }));
-  }, [selectedDates]);
+  }, [sortedDates]);
 
   // Update availability for a specific day
   const handleTimeSlotsChange = (dateStr, slots) => {
@@ -37,16 +45,16 @@ const AvailabilityComposer = ({ selectedDates, onClose, allEvents = [] }) => {
   };
 
   // Format time for display
-  const formatTime = (timeStr) => {
+  const formatTime = useCallback((timeStr) => {
     const [hours, minutes] = timeStr.split(":");
     const hour = parseInt(hours);
     const ampm = hour >= 12 ? "PM" : "AM";
     const displayHour = hour % 12 || 12;
     return `${displayHour}:${minutes} ${ampm}`;
-  };
+  }, []);
 
   // Generate the availability text snippet
-  const generateSnippet = () => {
+  const generateSnippet = useCallback(() => {
     let snippet = `Would 30 min during any of these times (all in ${timezone
       .split("/")[1]
       .replace("_", " ")}) work for you?\n\n`;
@@ -85,12 +93,12 @@ const AvailabilityComposer = ({ selectedDates, onClose, allEvents = [] }) => {
 
     setSnippetText(snippet);
     return snippet;
-  };
+  }, [dayAvailability, formatTime, sortedDates, timezone]);
 
   // Update snippet whenever availability changes
   useEffect(() => {
     generateSnippet();
-  }, [dayAvailability, timezone]);
+  }, [generateSnippet]);
 
   // Copy to clipboard
   const copyToClipboard = async () => {
@@ -256,10 +264,6 @@ const AvailabilityComposer = ({ selectedDates, onClose, allEvents = [] }) => {
                       return processedEvent;
                     });
 
-                  // Count events by source
-                  const googleEventsCount = dayEvents.filter(e => e.isGoogleCalendarEvent).length;
-                  const otherEventsCount = dayEvents.length - googleEventsCount;
-
                   return (
                     <div
                       key={dateStr}
@@ -270,18 +274,10 @@ const AvailabilityComposer = ({ selectedDates, onClose, allEvents = [] }) => {
                       {/* Event count indicators */}
                       {dayEvents.length > 0 && (
                         <div className="mb-3 flex flex-wrap gap-2">
-                          {googleEventsCount > 0 && (
-                            <div className="flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md">
-                              <FaGoogle size={10} />
-                              <span>{googleEventsCount} Google Calendar event{googleEventsCount > 1 ? 's' : ''}</span>
-                            </div>
-                          )}
-                          {otherEventsCount > 0 && (
-                            <div className="flex items-center gap-1 text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-md">
-                              <FaCalendarAlt size={10} />
-                              <span>{otherEventsCount} other event{otherEventsCount > 1 ? 's' : ''}</span>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-1 text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-md">
+                            <FaCalendarAlt size={10} />
+                            <span>{dayEvents.length} event{dayEvents.length > 1 ? 's' : ''}</span>
+                          </div>
                           <div className="text-xs text-gray-500 ml-auto">
                             (shown on timeline below)
                           </div>

@@ -447,28 +447,29 @@ const ImageBrowser = ({
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-4">
                   {ocrResult ? (
-                    <ReactMarkdown
-                      className="text-sm text-gray-200 leading-relaxed"
-                      components={{
-                        h1: ({ node, ...props }) => (
-                          <h1
-                            {...props}
-                            className="text-xl font-bold mt-4 mb-2"
-                          />
-                        ),
-                        h2: ({ node, ...props }) => (
-                          <h2
-                            {...props}
-                            className="text-lg font-semibold mt-3 mb-2"
-                          />
-                        ),
-                        p: ({ node, ...props }) => (
-                          <p {...props} className="mb-2" />
-                        ),
-                      }}
-                    >
-                      {ocrResult}
-                    </ReactMarkdown>
+                    <div className="text-sm text-gray-200 leading-relaxed">
+                      <ReactMarkdown
+                        components={{
+                          h1: ({ node, ...props }) => (
+                            <h1
+                              {...props}
+                              className="text-xl font-bold mt-4 mb-2"
+                            />
+                          ),
+                          h2: ({ node, ...props }) => (
+                            <h2
+                              {...props}
+                              className="text-lg font-semibold mt-3 mb-2"
+                            />
+                          ),
+                          p: ({ node, ...props }) => (
+                            <p {...props} className="mb-2" />
+                          ),
+                        }}
+                      >
+                        {ocrResult}
+                      </ReactMarkdown>
+                    </div>
                   ) : (
                     <div className="text-gray-400 text-center mt-8">
                       Click &quot;Extract Text&quot; to process this image

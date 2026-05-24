@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { marked } from "marked";
 import {
   FaCheck,
@@ -53,6 +53,7 @@ const ExportExternalLinkModal = ({
   const [linkGroupSearch, setLinkGroupSearch] = useState("");
   const [notationSearch, setNotationSearch] = useState("");
   const [notationStatusFilter, setNotationStatusFilter] = useState("all"); // "all", "active", "completed", "pending", etc.
+  const generatePromptContentRef = useRef(null);
 
   useEffect(() => {
     if (isOpen && externalLink) {
@@ -111,16 +112,29 @@ const ExportExternalLinkModal = ({
       setResourceOptions(initialResourceOptions);
 
       // Generate initial prompt content
-      generatePromptContent();
+      generatePromptContentRef.current?.();
     }
-  }, [isOpen, externalLink, linkGroups]);
+  }, [
+    isOpen,
+    externalLink,
+    linkGroups,
+    linkedResources,
+    exportOptions.includeSubmitterInfo,
+  ]);
 
   // Update prompt content whenever options change
   useEffect(() => {
     if (isOpen && externalLink) {
-      generatePromptContent();
+      generatePromptContentRef.current?.();
     }
-  }, [exportOptions, linkGroupOptions, notationOptions, resourceOptions]);
+  }, [
+    exportOptions,
+    externalLink,
+    isOpen,
+    linkGroupOptions,
+    notationOptions,
+    resourceOptions,
+  ]);
 
   if (!isOpen || !externalLink) return null;
 
@@ -382,6 +396,7 @@ const ExportExternalLinkModal = ({
 
     setPromptContent(prompt);
   };
+  generatePromptContentRef.current = generatePromptContent;
 
   const handleCopy = () => {
     navigator.clipboard

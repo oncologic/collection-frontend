@@ -1,10 +1,4 @@
-const VIDEO_FILE_EXTENSIONS = [
-  ".mp4",
-  ".mov",
-  ".webm",
-  ".avi",
-  ".mpeg",
-];
+const VIDEO_FILE_EXTENSIONS = [".mp4", ".mov", ".webm", ".avi", ".mpeg"];
 
 export const normalizeVideoUrl = (url) => {
   if (typeof url !== "string") return null;
@@ -101,9 +95,16 @@ export const getVideoType = (url) => {
   if (normalizedUrl.toLowerCase().includes("zoom.us")) return "zoom";
 
   const lowerUrl = normalizedUrl.toLowerCase();
+  const parsedUrl = parseVideoUrl(normalizedUrl);
+  const lowerPathname = parsedUrl?.pathname?.toLowerCase() || "";
+  const hasVideoFileExtension = VIDEO_FILE_EXTENSIONS.some((extension) =>
+    lowerPathname.endsWith(extension),
+  );
+
   if (
     lowerUrl.includes("cloudfront.net") ||
-    VIDEO_FILE_EXTENSIONS.some((extension) => lowerUrl.endsWith(extension))
+    lowerUrl.includes("blob.core.windows.net") ||
+    hasVideoFileExtension
   ) {
     return "s3-video";
   }

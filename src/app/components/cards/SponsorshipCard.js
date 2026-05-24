@@ -67,12 +67,13 @@ const SponsorCard = ({
       }
     };
 
+    const contentElement = contentRef.current;
     checkScrollable();
-    contentRef.current?.addEventListener("scroll", handleScroll);
+    contentElement?.addEventListener("scroll", handleScroll);
     window.addEventListener("resize", checkScrollable);
 
     return () => {
-      contentRef.current?.removeEventListener("scroll", handleScroll);
+      contentElement?.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", checkScrollable);
     };
   }, [tier]);
