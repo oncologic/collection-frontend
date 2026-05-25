@@ -886,6 +886,8 @@ const CustomChat = forwardRef(
         sourceCollectionName:
           item.sourceCollectionName || item.source_collection_name,
         workflowMetadata: item.workflowMetadata || item.workflow_metadata,
+        durationValue: item.durationValue || item.duration_value || null,
+        durationUnit: item.durationUnit || item.duration_unit || null,
       };
 
       // Handle different item types
@@ -1383,6 +1385,8 @@ const CustomChat = forwardRef(
         sourceCollectionName:
           item.sourceCollectionName || item.source_collection_name || null,
         workflowMetadata: item.workflowMetadata || item.workflow_metadata || {},
+        durationValue: item.durationValue || item.duration_value || null,
+        durationUnit: item.durationUnit || item.duration_unit || null,
         isTemplate: type === "collection" ? isTemplateCollectionItem(item) : false,
       };
     };

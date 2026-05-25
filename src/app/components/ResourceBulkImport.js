@@ -8,11 +8,15 @@ import {
   FaFileAlt,
   FaTimes,
   FaBuilding,
+  FaLink,
+  FaClipboard,
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 import Papa from "papaparse";
 import { useContextAuth } from "../context/authContext";
 import { useAuth } from "@clerk/nextjs";
+import { buildResourceImportLLMPrompt } from "../utils/resourceImportPrompt";
+import SelectField from "./inputs/SelectField";
 
 const ResourceBulkImport = ({
   onClose,
@@ -38,6 +42,7 @@ const ResourceBulkImport = ({
   const [bulkOrganizationName, setBulkOrganizationName] = useState("");
   const [backfillingEmbeddings, setBackfillingEmbeddings] = useState(false);
   const [embeddingBackfillStatus, setEmbeddingBackfillStatus] = useState(null);
+  const [strictRelatedLinks, setStrictRelatedLinks] = useState(false);
 
   const fileInputRef = useRef(null);
   const { isAdmin, isAdvocate, getAuthHeader } = useContextAuth();
@@ -98,10 +103,35 @@ const ResourceBulkImport = ({
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [filteredOrganizations, organizations, previewData]);
 
+  const bulkAssignmentOrganizationOptions = useMemo(
+    () => [
+      { id: "", name: "Select organization..." },
+      ...bulkAssignmentOrganizations.map((organizationName) => ({
+        id: organizationName,
+        name: organizationName,
+      })),
+    ],
+    [bulkAssignmentOrganizations]
+  );
+
   const areAllPreviewResourcesSelected = useMemo(() => {
     if (!previewData?.resources?.length) return false;
     return selectedPreviewResources.size === previewData.resources.length;
   }, [previewData, selectedPreviewResources]);
+
+  const relatedLinkPreview = previewData?.relatedLinkPreview || {
+    items: [],
+    summary: {},
+  };
+  const relatedLinkPreviewSummary = relatedLinkPreview.summary || {};
+  const strictRelatedLinkBlockers = useMemo(
+    () =>
+      (relatedLinkPreview.items || []).filter((item) =>
+        ["unresolved", "self_reference"].includes(item.status)
+      ),
+    [relatedLinkPreview.items]
+  );
+  const hasStrictRelatedLinkBlockers = strictRelatedLinkBlockers.length > 0;
 
   const canBackfillTenantEmbeddings = useMemo(() => {
     if (isAdmin) {
@@ -160,6 +190,11 @@ const ResourceBulkImport = ({
     };
   }, [embeddingBackfillStatus]);
 
+  const allowedDurationUnits = useMemo(
+    () => new Set(["minutes", "hours", "days", "weeks", "months", "years"]),
+    []
+  );
+
   useEffect(() => {
     setSelectedPreviewResources(new Set());
     setBulkOrganizationName("");
@@ -187,6 +222,32 @@ const ResourceBulkImport = ({
         rowErrors.push(`Invalid URL format: ${resource.url}`);
       }
 
+      const hasDurationValue =
+        resource.durationValue !== null &&
+        resource.durationValue !== undefined &&
+        resource.durationValue !== "";
+      const hasDurationUnit =
+        resource.durationUnit !== null &&
+        resource.durationUnit !== undefined &&
+        resource.durationUnit !== "";
+
+      if (hasDurationValue || hasDurationUnit) {
+        const numericDuration = Number(resource.durationValue);
+        const normalizedDurationUnit = String(
+          resource.durationUnit || ""
+        ).toLowerCase();
+
+        if (!Number.isFinite(numericDuration) || numericDuration <= 0) {
+          rowErrors.push("Duration value must be greater than 0");
+        }
+
+        if (!allowedDurationUnits.has(normalizedDurationUnit)) {
+          rowErrors.push(
+            "Duration unit must be minutes, hours, days, weeks, months, or years"
+          );
+        }
+      }
+
       if (rowErrors.length > 0) {
         errors.push({
           row: rowNumber,
@@ -196,7 +257,7 @@ const ResourceBulkImport = ({
     });
 
     setValidationErrors(errors);
-  }, [currentStep, previewData]);
+  }, [allowedDurationUnits, currentStep, previewData]);
 
   useEffect(() => {
     if (!selectedTenant?.id || !canBackfillTenantEmbeddings) {
@@ -412,6 +473,24 @@ const ResourceBulkImport = ({
     "Resource Type",
     "tags",
     "Service",
+    "resourceKey",
+    "Resource Key",
+    "durationValue",
+    "Duration Value",
+    "durationUnit",
+    "Duration Unit",
+    "relatedResourceKeys",
+    "Related Resource Keys",
+    "relatedResourceNames",
+    "Related Resource Names",
+    "relatedResourceUrls",
+    "Related Resource URLs",
+    "relatedLinkCategory",
+    "Related Link Category",
+    "relatedLinkDescription",
+    "Related Link Description",
+    "relatedLinkVisibility",
+    "Related Link Visibility",
     "targetAudience",
     "Target Audience",
     "demographics",
@@ -568,6 +647,16 @@ const ResourceBulkImport = ({
         timestamps: "0:00 Introduction\n2:30 Key Points\n5:45 Summary",
         fullText: "Full article content goes here...",
         featured: "false",
+        resourceKey: "mental_health_resources_guide",
+        durationValue: "1",
+        durationUnit: "weeks",
+        relatedResourceKeys: "trauma_informed_care_training",
+        relatedResourceNames: "",
+        relatedResourceUrls: "",
+        relatedLinkCategory: "Resource",
+        relatedLinkDescription:
+          "Use this training after reviewing the guide.",
+        relatedLinkVisibility: "private",
       },
       {
         name: "Trauma-Informed Care Training Video",
@@ -586,6 +675,15 @@ const ResourceBulkImport = ({
         timestamps: "0:00 Welcome\n1:15 Definition\n3:45 Best Practices",
         fullText: "Video transcript content...",
         featured: "true",
+        resourceKey: "trauma_informed_care_training",
+        durationValue: "3",
+        durationUnit: "days",
+        relatedResourceKeys: "",
+        relatedResourceNames: "",
+        relatedResourceUrls: "",
+        relatedLinkCategory: "Resource",
+        relatedLinkDescription: "",
+        relatedLinkVisibility: "private",
       },
     ];
 
@@ -600,6 +698,45 @@ const ResourceBulkImport = ({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+  };
+
+  const handleCopyLLMPrompt = async () => {
+    const prompt = buildResourceImportLLMPrompt({
+      resourceTypes,
+      organizations: filteredOrganizations.length
+        ? filteredOrganizations
+        : organizations,
+      sensitivityLevels,
+      expertiseLevels,
+      targetAudiences,
+      tags,
+    });
+
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        navigator.clipboard?.writeText
+      ) {
+        await navigator.clipboard.writeText(prompt);
+      } else if (typeof document !== "undefined") {
+        const textarea = document.createElement("textarea");
+        textarea.value = prompt;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      } else {
+        throw new Error("Clipboard is unavailable");
+      }
+
+      toast.success("LLM import prompt copied");
+    } catch (error) {
+      console.error("Failed to copy LLM prompt:", error);
+      toast.error("Failed to copy LLM prompt");
     }
   };
 
@@ -633,80 +770,6 @@ const ResourceBulkImport = ({
     }
   };
 
-  // Map backend TSV columns to frontend expected columns
-  const mapTSVColumns = (row) => {
-    // Handle the backend's TSV format with Organization, Service, Link columns
-    const mappedRow = {};
-
-    // Primary mappings for backend TSV format
-    // Organization column is BOTH the resource name AND the organization to link/create
-    mappedRow.name =
-      row["Resource Name"] ||
-      row["name"] ||
-      row["Name"] ||
-      row["Organization"] ||
-      "";
-    mappedRow.url = row["Link"] || row["url"] || row["Resource URL"] || "";
-    mappedRow.description = row["Description"] || row["description"] || "";
-    mappedRow.resourceDate =
-      row["resourceDate"] ||
-      row["Resource Date"] ||
-      new Date().toISOString().split("T")[0];
-    mappedRow.resourceType =
-      row["resourceType"] || row["Resource Type"] || row["Type"] || "Website";
-
-    // Map Service column to tags (filter out N/A)
-    if (
-      row["Service"] &&
-      row["Service"] !== "N/A" &&
-      row["Service"] !== "n/a"
-    ) {
-      mappedRow.tags = row["Service"];
-    } else if (row["tags"] || row["Tags"]) {
-      // Also filter N/A from tags field
-      const tagValue = row["tags"] || row["Tags"];
-      if (tagValue !== "N/A" && tagValue !== "n/a") {
-        mappedRow.tags = tagValue;
-      }
-    }
-
-    // IMPORTANT: For backend TSV format, Organization column means the resource belongs to that org
-    // Map organizations - Organization column indicates the org this resource belongs to
-    if (row["organizations"] || row["Organizations"]) {
-      mappedRow.organizations = row["organizations"] || row["Organizations"];
-    } else if (row["Organization"]) {
-      // Organization column is the org this resource belongs to
-      mappedRow.organizations = row["Organization"];
-    }
-
-    // Additional field mappings
-    mappedRow.organizationAcronyms =
-      row["organizationAcronyms"] || row["Acronym"] || "";
-    mappedRow.organizationCategories =
-      row["organizationCategories"] || row["Category"] || "";
-    mappedRow.sensitivityLevel =
-      row["sensitivityLevel"] ||
-      row["Sensitivity"] ||
-      row["Sensitivity Level"] ||
-      "";
-    mappedRow.expertiseLevel =
-      row["expertiseLevel"] || row["Expertise"] || row["Expertise Level"] || "";
-    mappedRow.targetAudience =
-      row["targetAudience"] || row["Target Audience"] || "";
-    mappedRow.videoUrl = row["videoUrl"] || row["Video URL"] || "";
-    mappedRow.timestamps = row["timestamps"] || row["Timestamps"] || "";
-    mappedRow.fullText = row["fullText"] || row["Full Text"] || "";
-    mappedRow.featured = row["featured"] || row["Featured"] || "";
-
-    // Handle additional backend TSV columns
-    mappedRow.demographics = row["Demographics"] || "";
-    mappedRow.accessibility = row["Accessibility"] || "";
-    mappedRow.email = row["Email"] || "";
-    mappedRow.phone = row["Phone number"] || "";
-
-    return mappedRow;
-  };
-
   // Parse CSV/TSV file and get preview from backend
   const parseCSV = async (file) => {
     const fileName = file.name.toLowerCase();
@@ -724,9 +787,8 @@ const ResourceBulkImport = ({
           return;
         }
 
-        // Map the columns to expected format
-        const mappedData = results.data.map(mapTSVColumns);
-        setParsedData(mappedData);
+        // Keep original rows for preview so modern import columns are not lost.
+        setParsedData(results.data);
 
         // Convert to TSV format for backend - use original data, not mapped
         const tsvContent = convertToTSV(results.data);
@@ -749,6 +811,7 @@ const ResourceBulkImport = ({
               },
               body: JSON.stringify({
                 tsvContent: tsvContent,
+                importRows: results.data,
                 tenantId: tenantId,
               }),
             }
@@ -886,6 +949,31 @@ const ResourceBulkImport = ({
     } catch (_) {
       return false;
     }
+  };
+
+  const formatRelatedLinkStatus = (status) => {
+    const labels = {
+      resolved_imported: "Will link to imported resource",
+      resolved_external_url: "Will link to external URL",
+      duplicate_reference: "Duplicate reference",
+      self_reference: "Self-reference",
+      unresolved: "Unresolved",
+      duplicate: "Already exists",
+    };
+
+    return labels[status] || status || "Unknown";
+  };
+
+  const getRelatedLinkStatusClass = (status) => {
+    if (status === "resolved_imported" || status === "resolved_external_url") {
+      return "border-green-200 bg-green-50 text-green-700";
+    }
+
+    if (status === "duplicate_reference" || status === "duplicate") {
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    }
+
+    return "border-red-200 bg-red-50 text-red-700";
   };
 
   // Transform CSV row to resource object
@@ -1055,6 +1143,11 @@ const ResourceBulkImport = ({
       return;
     }
 
+    if (strictRelatedLinks && hasStrictRelatedLinkBlockers) {
+      toast.error("Fix unresolved or self-referencing related links first");
+      return;
+    }
+
     setImporting(true);
     setCurrentStep("importing");
 
@@ -1076,6 +1169,7 @@ const ResourceBulkImport = ({
           body: JSON.stringify({
             importData: previewData,
             tenantId: tenantId,
+            strictRelatedLinks,
           }),
         }
       );
@@ -1087,13 +1181,23 @@ const ResourceBulkImport = ({
         const importResults = {
           successful:
             result.summary.organizationsCreated +
-            result.summary.resourcesCreated,
+            result.summary.resourcesCreated +
+            (result.summary.relatedLinksCreated || 0),
           failed: result.summary.errors,
           errors: result.results.errors || [],
           organizationsCreated: result.summary.organizationsCreated,
           organizationsSkipped: result.summary.organizationsSkipped,
           resourcesCreated: result.summary.resourcesCreated,
           resourcesSkipped: result.summary.resourcesSkipped,
+          relatedLinksCreated: result.summary.relatedLinksCreated || 0,
+          relatedLinksSkipped: result.summary.relatedLinksSkipped || 0,
+          relatedLinksUnresolved: result.summary.relatedLinksUnresolved || 0,
+          relatedLinksSelfReferences:
+            result.summary.relatedLinksSelfReferences || 0,
+          relatedLinksSkippedDetails: result.results.relatedLinksSkipped || [],
+          relatedLinkDiagnostics:
+            result.results.diagnostics?.relatedLinkPreview || null,
+          strictRelatedLinks: result.summary.strictRelatedLinks || false,
           tagsCreated: result.summary.tagsCreated,
           tagsReused: result.summary.tagsReused,
         };
@@ -1111,6 +1215,12 @@ const ResourceBulkImport = ({
         if (importResults.resourcesCreated > 0) {
           toast.success(
             `Successfully imported ${importResults.resourcesCreated} resources`
+          );
+        }
+
+        if (importResults.relatedLinksCreated > 0) {
+          toast.success(
+            `Created ${importResults.relatedLinksCreated} related links`
           );
         }
 
@@ -1137,6 +1247,15 @@ const ResourceBulkImport = ({
           successful: 0,
           failed: parsedData.length,
           errors: [{ row: 0, error: error.message || "Import failed" }],
+          relatedLinksSkippedDetails:
+            error.details?.strictBlockers?.map((item) => ({
+              source: item.sourceName,
+              reference: item.reference,
+              status: item.status,
+              reason: item.reason || formatRelatedLinkStatus(item.status),
+            })) || [],
+          relatedLinkDiagnostics: error.details?.relatedLinkPreview || null,
+          strictRelatedLinks,
         });
         setImporting(false);
         setCurrentStep("complete");
@@ -1317,25 +1436,12 @@ const ResourceBulkImport = ({
               {/* Tenant Selection */}
               {selectedTenants && selectedTenants.length > 0 && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <label className="block text-sm font-medium text-blue-900 mb-2">
-                    Select Tenant for Import
-                  </label>
-                  <select
-                    value={selectedTenant?.id || ""}
-                    onChange={(e) => {
-                      const tenant = selectedTenants.find(
-                        (t) => t.id === e.target.value
-                      );
-                      setSelectedTenant(tenant);
-                    }}
-                    className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    {selectedTenants.map((tenant) => (
-                      <option key={tenant.id} value={tenant.id}>
-                        {tenant.name}
-                      </option>
-                    ))}
-                  </select>
+                  <SelectField
+                    label="Select Tenant for Import"
+                    value={selectedTenant}
+                    onChange={(tenant) => setSelectedTenant(tenant)}
+                    options={selectedTenants}
+                  />
                   <p className="mt-2 text-xs text-blue-700">
                     Resources will be imported to this tenant. Organizations
                     will be filtered based on tenant selection.
@@ -1391,13 +1497,20 @@ const ResourceBulkImport = ({
               )}
 
               {/* Download Template Button */}
-              <div className="flex justify-center mb-6">
+              <div className="mb-6 flex flex-wrap justify-center gap-3">
                 <button
                   onClick={generateSampleCSV}
                   className="inline-flex items-center px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-colors font-medium"
                 >
                   <FaDownload className="mr-2" />
                   Download CSV Template
+                </button>
+                <button
+                  onClick={handleCopyLLMPrompt}
+                  className="inline-flex items-center px-4 py-2 bg-white text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors font-medium"
+                >
+                  <FaClipboard className="mr-2" />
+                  Copy LLM Prompt
                 </button>
               </div>
 
@@ -1447,6 +1560,15 @@ const ResourceBulkImport = ({
                   <div className="font-mono">• targetAudience</div>
                   <div className="font-mono">• videoUrl</div>
                   <div className="font-mono">• tags</div>
+                  <div className="font-mono">• resourceKey</div>
+                  <div className="font-mono">• durationValue</div>
+                  <div className="font-mono">• durationUnit</div>
+                  <div className="font-mono">• relatedResourceKeys</div>
+                  <div className="font-mono">• relatedResourceNames</div>
+                  <div className="font-mono">• relatedResourceUrls</div>
+                  <div className="font-mono">• relatedLinkCategory</div>
+                  <div className="font-mono">• relatedLinkDescription</div>
+                  <div className="font-mono">• relatedLinkVisibility</div>
                   <div className="font-mono">• timestamps</div>
                   <div className="font-mono">• fullText</div>
                   <div className="font-mono">• featured</div>
@@ -1600,6 +1722,113 @@ const ResourceBulkImport = ({
                 </div>
               )}
 
+              {relatedLinkPreviewSummary.totalReferences > 0 && (
+                <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <h4 className="font-semibold text-gray-900">
+                        Related Link Diagnostics
+                      </h4>
+                      <p className="mt-1 text-sm text-gray-600">
+                        References are resolved before import so unresolved
+                        links can be fixed or skipped intentionally.
+                      </p>
+                    </div>
+                    <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={strictRelatedLinks}
+                        onChange={(event) =>
+                          setStrictRelatedLinks(event.target.checked)
+                        }
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span>
+                        Block import when related links are unresolved or point
+                        to themselves
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
+                    <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2">
+                      <div className="font-semibold text-green-800">
+                        {relatedLinkPreviewSummary.resolvedImported || 0}
+                      </div>
+                      <div className="text-green-700">Imported resources</div>
+                    </div>
+                    <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2">
+                      <div className="font-semibold text-green-800">
+                        {relatedLinkPreviewSummary.resolvedExternalUrl || 0}
+                      </div>
+                      <div className="text-green-700">External URLs</div>
+                    </div>
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                      <div className="font-semibold text-amber-800">
+                        {relatedLinkPreviewSummary.duplicateReferences || 0}
+                      </div>
+                      <div className="text-amber-700">Duplicates</div>
+                    </div>
+                    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
+                      <div className="font-semibold text-red-800">
+                        {relatedLinkPreviewSummary.unresolved || 0}
+                      </div>
+                      <div className="text-red-700">Unresolved</div>
+                    </div>
+                    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
+                      <div className="font-semibold text-red-800">
+                        {relatedLinkPreviewSummary.selfReferences || 0}
+                      </div>
+                      <div className="text-red-700">Self-references</div>
+                    </div>
+                  </div>
+
+                  {strictRelatedLinks && hasStrictRelatedLinkBlockers && (
+                    <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                      Strict mode is on. Fix or remove{" "}
+                      {strictRelatedLinkBlockers.length} blocking related-link
+                      reference
+                      {strictRelatedLinkBlockers.length === 1 ? "" : "s"} before
+                      importing.
+                    </div>
+                  )}
+
+                  <div className="mt-4 max-h-64 overflow-y-auto divide-y divide-gray-100 rounded-md border border-gray-200">
+                    {(relatedLinkPreview.items || []).map((item, index) => (
+                      <div
+                        key={`${item.sourceName}-${item.reference}-${index}`}
+                        className="grid gap-2 bg-white px-3 py-2 text-sm md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            Source
+                          </div>
+                          <div className="truncate text-gray-900">
+                            {item.sourceName}
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            Reference
+                          </div>
+                          <div className="truncate text-gray-700">
+                            {item.reference}
+                            {item.targetName ? ` -> ${item.targetName}` : ""}
+                          </div>
+                        </div>
+                        <div
+                          className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 text-xs font-medium ${getRelatedLinkStatusClass(
+                            item.status
+                          )}`}
+                        >
+                          {formatRelatedLinkStatus(item.status)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {previewData?.resources?.length > 0 && (
                 <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1619,21 +1848,20 @@ const ResourceBulkImport = ({
                   </div>
 
                   <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
-                    <select
-                      value={bulkOrganizationName}
-                      onChange={(e) => setBulkOrganizationName(e.target.value)}
-                      className="w-full lg:max-w-sm px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Select organization...</option>
-                      {bulkAssignmentOrganizations.map((organizationName) => (
-                        <option
-                          key={organizationName}
-                          value={organizationName}
-                        >
-                          {organizationName}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="w-full lg:max-w-sm">
+                      <SelectField
+                        label="Organization"
+                        value={
+                          bulkAssignmentOrganizationOptions.find(
+                            (option) => option.id === bulkOrganizationName
+                          ) || bulkAssignmentOrganizationOptions[0]
+                        }
+                        onChange={(organization) =>
+                          setBulkOrganizationName(organization?.id || "")
+                        }
+                        options={bulkAssignmentOrganizationOptions}
+                      />
+                    </div>
 
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -1687,7 +1915,7 @@ const ResourceBulkImport = ({
 
                   <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden">
                     <div className="max-h-80 overflow-auto">
-                      <table className="w-full min-w-[960px] table-fixed text-sm">
+                      <table className="w-full min-w-[1040px] table-fixed text-sm">
                         <thead className="bg-gray-50 sticky top-0 border-b border-gray-200">
                           <tr>
                             <th className="w-14 px-4 py-3 text-left">
@@ -1698,13 +1926,16 @@ const ResourceBulkImport = ({
                                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                               />
                             </th>
-                            <th className="w-[42%] px-4 py-3 text-left font-medium text-gray-700">
+                            <th className="w-[34%] px-4 py-3 text-left font-medium text-gray-700">
                               Resource
                             </th>
-                            <th className="w-[22%] px-4 py-3 text-left font-medium text-gray-700">
+                            <th className="w-[20%] px-4 py-3 text-left font-medium text-gray-700">
                               Current Organization
                             </th>
-                            <th className="w-[36%] px-4 py-3 text-left font-medium text-gray-700">
+                            <th className="w-[14%] px-4 py-3 text-left font-medium text-gray-700">
+                              Duration
+                            </th>
+                            <th className="w-[32%] px-4 py-3 text-left font-medium text-gray-700">
                               URL
                             </th>
                           </tr>
@@ -1746,6 +1977,19 @@ const ResourceBulkImport = ({
                                 >
                                   {resource.organizationName || "Unassigned"}
                                 </span>
+                              </td>
+                              <td className="px-4 py-3 align-top text-gray-600">
+                                {resource.durationValue &&
+                                resource.durationUnit ? (
+                                  <span className="inline-flex items-center rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+                                    {resource.durationValue}{" "}
+                                    {resource.durationUnit}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-gray-400">
+                                    Not set
+                                  </span>
+                                )}
                               </td>
                               <td className="px-4 py-3 align-top text-gray-600">
                                 <div className="break-all line-clamp-3 leading-5">
@@ -1881,9 +2125,13 @@ const ResourceBulkImport = ({
                 </button>
                 <button
                   onClick={handleImport}
-                  disabled={validationErrors.length > 0}
+                  disabled={
+                    validationErrors.length > 0 ||
+                    (strictRelatedLinks && hasStrictRelatedLinkBlockers)
+                  }
                   className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                    validationErrors.length > 0
+                    validationErrors.length > 0 ||
+                    (strictRelatedLinks && hasStrictRelatedLinkBlockers)
                       ? "bg-gray-400 cursor-not-allowed text-gray-200"
                       : "bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md"
                   }`}
@@ -1966,6 +2214,25 @@ const ResourceBulkImport = ({
                   </div>
                 )}
 
+                {importResults.relatedLinksCreated > 0 && (
+                  <div className="flex items-center justify-center mb-4">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mr-4">
+                      <FaLink className="text-2xl text-blue-600" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-2xl font-bold text-gray-900">
+                        {importResults.relatedLinksCreated}
+                      </div>
+                      <div className="text-gray-600">Related Links Created</div>
+                      {importResults.relatedLinksSkipped > 0 && (
+                        <div className="text-sm text-gray-500">
+                          {importResults.relatedLinksSkipped} skipped
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {importResults.failed > 0 && (
                   <div className="flex items-center justify-center">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mr-4">
@@ -2041,6 +2308,45 @@ const ResourceBulkImport = ({
                         <strong>Row {error.row}:</strong> {error.error}
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {importResults.relatedLinksSkippedDetails?.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-left">
+                  <h4 className="font-semibold text-amber-800 mb-2">
+                    <FaLink className="inline mr-2" />
+                    Related Links Skipped (
+                    {importResults.relatedLinksSkippedDetails.length})
+                  </h4>
+                  <div className="max-h-44 overflow-y-auto space-y-2">
+                    {importResults.relatedLinksSkippedDetails
+                      .slice(0, 20)
+                      .map((item, index) => (
+                        <div
+                          key={`${item.source}-${item.reference}-${index}`}
+                          className="rounded-md border border-amber-200 bg-white/70 px-3 py-2 text-sm text-amber-800"
+                        >
+                          <div className="font-medium">
+                            {item.source || item.sourceName || "Unknown source"}
+                          </div>
+                          <div className="mt-1 break-words">
+                            {item.reference && (
+                              <span>Reference: {item.reference}. </span>
+                            )}
+                            <span>
+                              {item.reason ||
+                                formatRelatedLinkStatus(item.status)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    {importResults.relatedLinksSkippedDetails.length > 20 && (
+                      <div className="text-sm text-amber-700">
+                        +{importResults.relatedLinksSkippedDetails.length - 20}{" "}
+                        more skipped related links
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

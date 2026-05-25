@@ -38,8 +38,20 @@ export const defaultResourceValues = {
   organizations: [],
   timestamps: "",
   fullText: "",
+  durationValue: "",
+  durationUnit: "",
   tenantId: "",
 };
+
+const durationUnitOptions = [
+  { id: "", name: "Select unit" },
+  { id: "minutes", name: "Minutes" },
+  { id: "hours", name: "Hours" },
+  { id: "days", name: "Days" },
+  { id: "weeks", name: "Weeks" },
+  { id: "months", name: "Months" },
+  { id: "years", name: "Years" },
+];
 
 export default function AddResourceForm({
   organizations,
@@ -132,6 +144,7 @@ export default function AddResourceForm({
   // Watch description to keep it in sync with form state
   const descriptionValue = watch("description");
   const selectedTypeValue = watch("typeId");
+  const selectedDurationUnit = watch("durationUnit");
 
   useEffect(() => {
     register("imageKey");
@@ -335,6 +348,13 @@ export default function AddResourceForm({
       return;
     }
 
+    if (
+      Boolean(data.durationValue) !== Boolean(data.durationUnit)
+    ) {
+      toast.error("Duration value and duration unit must be provided together");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       // Check if we have an image to upload
@@ -360,6 +380,8 @@ export default function AddResourceForm({
           tenantId: selectedTenant?.id || null,
           timestamps: data.timestamps || "",
           fullText: data.fullText || "",
+          durationValue: data.durationValue || null,
+          durationUnit: data.durationUnit || null,
           organizations: data.organizations || [],
           tags: data.tags || [],
         };
@@ -373,6 +395,8 @@ export default function AddResourceForm({
         // No image, use regular JSON submission
         const transformedData = {
           ...data,
+          durationValue: data.durationValue || null,
+          durationUnit: data.durationUnit || null,
           sensitivityLevelId:
             data.sensitivityLevelId?.id || data.sensitivityLevelId || null,
           expertiseLevelId:
@@ -644,6 +668,37 @@ export default function AddResourceForm({
                   type="date"
                   {...register("resourceUpdatedDate", { required: false })}
                   className="mt-1 block w-full py-2 px-4 rounded-md border-gray-300 shadow-sm border focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px] gap-4">
+              <div className="grid grid-cols-1 space-y-2">
+                <InputField
+                  id="durationValue"
+                  name="durationValue"
+                  label="Estimated Duration (optional)"
+                  type="number"
+                  min="0.01"
+                  step="any"
+                  register={register}
+                  placeholder="Example: 2"
+                  helperText="Optional. Use with a duration unit."
+                />
+              </div>
+              <div className="grid grid-cols-1 space-y-2">
+                <SelectField
+                  id="durationUnit"
+                  label="Duration Unit"
+                  value={
+                    durationUnitOptions.find(
+                      (option) => option.id === selectedDurationUnit
+                    ) || durationUnitOptions[0]
+                  }
+                  onChange={(selected) =>
+                    setValue("durationUnit", selected?.id || "")
+                  }
+                  options={durationUnitOptions}
                 />
               </div>
             </div>

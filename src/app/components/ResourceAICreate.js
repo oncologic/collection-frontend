@@ -20,6 +20,7 @@ import {
   FaShieldAlt,
   FaLightbulb,
   FaExclamationTriangle,
+  FaClock,
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 import { usePreviewResources, useConfirmResources } from "../hooks/useAI";
@@ -71,6 +72,31 @@ const calculateSimilarity = (str1, str2) => {
   const distance = levenshteinDistance(longer, shorter);
   return (longer.length - distance) / longer.length;
 };
+
+const durationUnitOptions = [
+  { id: "", name: "Select unit" },
+  { id: "minutes", name: "Minutes" },
+  { id: "hours", name: "Hours" },
+  { id: "days", name: "Days" },
+  { id: "weeks", name: "Weeks" },
+  { id: "months", name: "Months" },
+  { id: "years", name: "Years" },
+];
+
+const formatGeneratedDuration = (resource = {}) => {
+  if (!resource.durationValue || !resource.durationUnit) return null;
+  return `${resource.durationValue} ${resource.durationUnit}`;
+};
+
+const countRelatedResourceReferences = (resource = {}) =>
+  [
+    resource.relatedResourceKeys,
+    resource.relatedResourceNames,
+    resource.relatedResourceUrls,
+  ].reduce(
+    (total, value) => total + (Array.isArray(value) ? value.length : 0),
+    0
+  );
 
 const ResourceAICreate = ({
   onClose,
@@ -640,12 +666,29 @@ const ResourceAICreate = ({
               name: String(resource.name || resource.title || ""),
               description: String(resource.description || ""),
               url: String(resource.url || ""),
-              resourceTypeId: String(resource.typeId || ""),
+              resourceTypeId: String(
+                resource.resourceTypeId || resource.typeId || ""
+              ),
               sensitivityLevelId: resource.sensitivityLevelId || "",
               expertiseLevelId: resource.expertiseLevelId || "",
               tags: Array.isArray(resource.tags)
                 ? resource.tags.map((tag) => String(tag))
                 : [],
+              resourceKey: String(resource.resourceKey || ""),
+              durationValue: resource.durationValue ?? "",
+              durationUnit: resource.durationUnit || "",
+              relatedResourceKeys: Array.isArray(resource.relatedResourceKeys)
+                ? resource.relatedResourceKeys.map((value) => String(value))
+                : [],
+              relatedResourceNames: Array.isArray(resource.relatedResourceNames)
+                ? resource.relatedResourceNames.map((value) => String(value))
+                : [],
+              relatedResourceUrls: Array.isArray(resource.relatedResourceUrls)
+                ? resource.relatedResourceUrls.map((value) => String(value))
+                : [],
+              relatedLinkCategory: resource.relatedLinkCategory || "resource",
+              relatedLinkDescription: resource.relatedLinkDescription || "",
+              relatedLinkVisibility: resource.relatedLinkVisibility || "private",
               tenantId: resource.tenantId || selectedTenants?.[0] || "",
             };
 
@@ -706,6 +749,13 @@ const ResourceAICreate = ({
       cleanValue = value.map((tag) =>
         typeof tag === "string" ? tag : String(tag.id || tag)
       );
+    } else if (
+      ["relatedResourceKeys", "relatedResourceNames", "relatedResourceUrls"].includes(
+        field
+      ) &&
+      Array.isArray(value)
+    ) {
+      cleanValue = value.map((item) => String(item).trim()).filter(Boolean);
     } else if (
       typeof value === "object" &&
       value !== null &&
@@ -827,6 +877,42 @@ const ResourceAICreate = ({
           name: resource.name || "Unnamed Resource",
           error: "Resource URL is required",
         });
+      }
+      const hasDurationValue =
+        resource.durationValue !== null &&
+        resource.durationValue !== undefined &&
+        resource.durationValue !== "";
+      const hasDurationUnit =
+        resource.durationUnit !== null &&
+        resource.durationUnit !== undefined &&
+        resource.durationUnit !== "";
+
+      if (hasDurationValue || hasDurationUnit) {
+        const durationValue = Number(resource.durationValue);
+        const validDurationUnits = new Set([
+          "minutes",
+          "hours",
+          "days",
+          "weeks",
+          "months",
+          "years",
+        ]);
+
+        if (!Number.isFinite(durationValue) || durationValue <= 0) {
+          validationErrors.push({
+            index,
+            name: resource.name || "Unnamed Resource",
+            error: "Duration value must be greater than 0",
+          });
+        }
+
+        if (!validDurationUnits.has(resource.durationUnit)) {
+          validationErrors.push({
+            index,
+            name: resource.name || "Unnamed Resource",
+            error: "Duration unit must be minutes, hours, days, weeks, months, or years",
+          });
+        }
       }
     });
 
@@ -1683,6 +1769,90 @@ const ResourceAICreate = ({
                               />
                             </div>
 
+                            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_140px_180px] gap-4">
+                              <InputField
+                                label="Resource Key"
+                                value={resource.resourceKey || ""}
+                                onChange={(e) =>
+                                  updateResource(
+                                    index,
+                                    "resourceKey",
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="project_readiness_checklist"
+                              />
+                              <InputField
+                                label="Duration"
+                                type="number"
+                                min="0.01"
+                                step="any"
+                                value={resource.durationValue || ""}
+                                onChange={(e) =>
+                                  updateResource(
+                                    index,
+                                    "durationValue",
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="2"
+                              />
+                              <SelectField
+                                label="Duration Unit"
+                                value={
+                                  durationUnitOptions.find(
+                                    (option) =>
+                                      option.id === resource.durationUnit
+                                  ) || durationUnitOptions[0]
+                                }
+                                onChange={(selected) =>
+                                  updateResource(
+                                    index,
+                                    "durationUnit",
+                                    selected?.id || ""
+                                  )
+                                }
+                                options={durationUnitOptions}
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <InputField
+                                label="Related Resource Keys"
+                                value={
+                                  resource.relatedResourceKeys?.join("; ") || ""
+                                }
+                                onChange={(e) =>
+                                  updateResource(
+                                    index,
+                                    "relatedResourceKeys",
+                                    e.target.value
+                                      .split(/[;,]/)
+                                      .map((value) => value.trim())
+                                      .filter(Boolean)
+                                  )
+                                }
+                                placeholder="resource_key_a; resource_key_b"
+                              />
+                              <InputField
+                                label="Related Resource URLs"
+                                value={
+                                  resource.relatedResourceUrls?.join("; ") || ""
+                                }
+                                onChange={(e) =>
+                                  updateResource(
+                                    index,
+                                    "relatedResourceUrls",
+                                    e.target.value
+                                      .split(/[;,]/)
+                                      .map((value) => value.trim())
+                                      .filter(Boolean)
+                                  )
+                                }
+                                placeholder="https://example.com"
+                              />
+                            </div>
+
                             <div className="grid grid-cols-2 gap-4">
                               <SelectField
                                 label="Sensitivity Level"
@@ -1829,6 +1999,37 @@ const ResourceAICreate = ({
                             </div>
 
                             <div className="flex flex-wrap gap-4 text-sm">
+                              {formatGeneratedDuration(resource) && (
+                                <div className="flex items-center space-x-2">
+                                  <FaClock className="text-gray-500" />
+                                  <span className="text-gray-600">
+                                    {formatGeneratedDuration(resource)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {resource.resourceKey && (
+                                <div className="flex items-center space-x-2">
+                                  <FaKeyboard className="text-gray-500" />
+                                  <span className="font-mono text-xs text-gray-600">
+                                    {resource.resourceKey}
+                                  </span>
+                                </div>
+                              )}
+
+                              {countRelatedResourceReferences(resource) > 0 && (
+                                <div className="flex items-center space-x-2">
+                                  <FaLink className="text-gray-500" />
+                                  <span className="text-gray-600">
+                                    {countRelatedResourceReferences(resource)} related
+                                    reference
+                                    {countRelatedResourceReferences(resource) > 1
+                                      ? "s"
+                                      : ""}
+                                  </span>
+                                </div>
+                              )}
+
                               {resource.organizations?.length > 0 && (
                                 <div className="flex items-center space-x-2">
                                   <FaGlobeAmericas className="text-gray-500" />

@@ -69,12 +69,17 @@ import {
   addResourceToCollection,
   addResourcesToCollectionExternalLink,
   addExternalLinkToCollection,
+  addExternalLinkNotation,
   createCollection,
   createWorkflowInstanceFromTemplate,
   getCollectionById,
   getWorkflowTimeline,
 } from "../api/collectionsApi";
 import { stripHtmlToText } from "../utils/sanitizeHtml";
+import {
+  buildResourceTimelineItems,
+  formatResourceDuration,
+} from "../utils/resourceTimeline";
 
 // Add this utility function near the top of the file, after imports
 const formatHeaderText = (text) => {
@@ -426,40 +431,6 @@ const daysBetween = (startDate, endDate) => {
 const daysBetweenInclusive = (startDate, endDate) => {
   const diff = daysBetween(startDate, endDate);
   return diff === null || diff < 0 ? null : diff + 1;
-};
-
-const getResourcePlanDurationDays = (resource = {}) => {
-  const explicitStart = toDateString(resource.startDate || resource.start_date);
-  const explicitEnd = toDateString(resource.endDate || resource.end_date);
-  const explicitDuration = daysBetweenInclusive(explicitStart, explicitEnd);
-  if (explicitDuration) return explicitDuration;
-
-  const text = stripHtmlToText(
-    [
-      resource.title,
-      resource.name,
-      resource.description,
-      resource.notes,
-      resource.fullText,
-      resource.full_text,
-    ]
-      .filter(Boolean)
-      .join(" "),
-  ).toLowerCase();
-  const durationMatch = text.match(
-    /(\d+(?:\.\d+)?)\s*(business\s+days?|work\s+days?|weeks?|months?|years?|days?)/,
-  );
-
-  if (!durationMatch) return 1;
-
-  const amount = Number(durationMatch[1]);
-  if (!Number.isFinite(amount) || amount <= 0) return 1;
-
-  const unit = durationMatch[2];
-  if (unit.includes("year")) return Math.max(1, Math.ceil(amount * 365));
-  if (unit.includes("month")) return Math.max(1, Math.ceil(amount * 30));
-  if (unit.includes("week")) return Math.max(1, Math.ceil(amount * 7));
-  return Math.max(1, Math.ceil(amount));
 };
 
 const getExternalLinkSelectionKey = (link = {}) =>
@@ -1549,6 +1520,45 @@ const DashboardContent = ({
     }
   };
 
+  const buildResourceTaskNotation = (resource, timelineItem) => {
+    const name = resource.name || resource.title || "Untitled resource";
+    const resourceDuration = formatResourceDuration(resource);
+
+    return {
+      title: name,
+      description:
+        stripHtmlToText(resource.description || "") ||
+        `Complete ${name}`,
+      notes: [
+        "Generated from a resource selected in the dashboard collection builder.",
+        resource.url ? `Source resource: ${resource.url}` : null,
+        resourceDuration ? `Estimated duration: ${resourceDuration}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      category: "Task",
+      status: "pending",
+      type: "task",
+      visibility: "private",
+      date: timelineItem.startDate,
+      startDate: timelineItem.startDate,
+      endDate: timelineItem.endDate,
+      customFields: {
+        sourceResourceId: resource.id,
+        sourceResourceName: name,
+        durationDays: timelineItem.durationDays,
+        durationValue: resource.durationValue ?? resource.duration_value ?? null,
+        durationUnit: resource.durationUnit ?? resource.duration_unit ?? null,
+      },
+      submissionMetadata: {
+        generatedFromCollectionBuilder: true,
+        sourceResourceId: resource.id,
+        relativeStartDay: timelineItem.relativeStartDay,
+        durationDays: timelineItem.durationDays,
+      },
+    };
+  };
+
   const createResourceExternalLinksForCollection = async (
     collectionId,
     resources = [],
@@ -1560,24 +1570,15 @@ const DashboardContent = ({
     const uniqueResources = uniquePlanItems(resources).filter(
       (item) => item.type === "resource",
     );
-    let nextOffsetDays = 0;
+    const resourceTimelineItems = buildResourceTimelineItems(
+      uniqueResources,
+      projectStartDate,
+    );
 
-    for (const [index, resource] of uniqueResources.entries()) {
+    for (const timelineItem of resourceTimelineItems) {
+      const { resource, startDate, endDate, durationDays, relativeStartDay } =
+        timelineItem;
       try {
-        const explicitStart = toDateString(resource.startDate || resource.start_date);
-        const explicitEnd =
-          toDateString(resource.endDate || resource.end_date) || explicitStart;
-        const durationDays = getResourcePlanDurationDays(resource);
-        const startDate =
-          explicitStart || addDaysToDateString(projectStartDate, nextOffsetDays);
-        const endDate =
-          explicitEnd ||
-          addDaysToDateString(startDate, Math.max(0, durationDays - 1)) ||
-          startDate;
-        const relativeStartDay =
-          explicitStart && projectStartDate
-            ? Math.max(0, daysBetween(projectStartDate, explicitStart) ?? 0)
-            : nextOffsetDays;
         const name = resource.name || resource.title || "Untitled resource";
 
         const createdLink = await addExternalLinkToCollection(
@@ -1594,7 +1595,7 @@ const DashboardContent = ({
             startDate,
             endDate,
             status: "pending",
-            sortOrder: startingSortOrder + index,
+            sortOrder: startingSortOrder + timelineItem.index,
             imageUrl: resource.imageUrl || resource.image_url || null,
             imageMetadata:
               resource.imageMetadata || resource.image_metadata || null,
@@ -1604,7 +1605,9 @@ const DashboardContent = ({
               sourceResourceName: name,
               generatedFromCollectionBuilder: true,
               relativeStartDay,
-              durationDays: daysBetweenInclusive(startDate, endDate) || durationDays,
+              durationDays,
+              durationValue: resource.durationValue ?? resource.duration_value ?? null,
+              durationUnit: resource.durationUnit ?? resource.duration_unit ?? null,
             },
           },
           headers,
@@ -1623,8 +1626,18 @@ const DashboardContent = ({
           headers,
         );
 
-        if (!explicitStart) {
-          nextOffsetDays += Math.max(1, daysBetweenInclusive(startDate, endDate) || durationDays);
+        try {
+          await addExternalLinkNotation(
+            collectionId,
+            createdLink.id,
+            buildResourceTaskNotation(resource, timelineItem),
+            headers,
+          );
+        } catch (notationError) {
+          console.warn(
+            "Failed to create task notation for generated resource link:",
+            notationError,
+          );
         }
       } catch (error) {
         console.warn(
@@ -1788,6 +1801,12 @@ const DashboardContent = ({
       collectionName: buildProjectNameFromPrompt(
         suggestion.prompt || suggestion.title || "Project collection",
       ),
+      projectStartDate:
+        toDateString(
+          suggestion.projectStartDate ||
+            suggestion.startDate ||
+            suggestion.start_date,
+        ) || toDateString(new Date()),
     });
     setCollectionPlanSearch("");
     setCollectionPlanTab(
@@ -2033,7 +2052,8 @@ const DashboardContent = ({
     setIsCreatingCollectionPlan(true);
     try {
       const headers = await getAuthHeader();
-      const projectStartDate = toDateString(new Date());
+      const projectStartDate =
+        toDateString(suggestion.projectStartDate) || toDateString(new Date());
       const fallbackSourceStartDate =
         externalLinks
           .map((link) => toDateString(link.startDate || link.date))
@@ -2048,22 +2068,14 @@ const DashboardContent = ({
           index,
         ),
       }));
+      const resourceTimelineItems = buildResourceTimelineItems(
+        resources,
+        projectStartDate,
+      );
       const projectEndDate =
         [
           ...adjustedLinks.map((link) => link.adjustedDates.endDate),
-          resources.length > 0
-            ? addDaysToDateString(
-                projectStartDate,
-                Math.max(
-                  0,
-                  resources.reduce(
-                    (sum, resource) =>
-                      sum + Math.max(1, getResourcePlanDurationDays(resource)),
-                    0,
-                  ) - 1,
-                ),
-              )
-            : null,
+          ...resourceTimelineItems.map((item) => item.endDate),
           ...resources
             .map((resource) =>
               toDateString(resource.endDate || resource.end_date),
@@ -2736,6 +2748,15 @@ const DashboardContent = ({
   const selectedWorkflowTemplate = getSelectedPlannerTemplate();
   const builderSelectedExternalLinks = getBuilderExternalLinks();
   const builderSelectedResources = getBuilderResources();
+  const builderProjectStartDate =
+    toDateString(collectionPlanBuilder?.projectStartDate) ||
+    toDateString(new Date());
+  const builderSelectedResourceTimeline = collectionPlanBuilder
+    ? buildResourceTimelineItems(
+        builderSelectedResources,
+        builderProjectStartDate,
+      )
+    : [];
   const builderExternalLinkResults = collectionPlanBuilder
     ? getFilteredBuilderExternalLinks()
     : [];
@@ -2944,24 +2965,44 @@ const DashboardContent = ({
 
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="space-y-4">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Collection name
-                    <input
-                      type="text"
-                      value={collectionPlanBuilder.collectionName}
-                      onChange={(event) =>
-                        setCollectionPlanBuilder((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                collectionName: event.target.value,
-                              }
-                            : prev,
-                        )
-                      }
-                      className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-normal text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                    />
-                  </label>
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_190px]">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Collection name
+                      <input
+                        type="text"
+                        value={collectionPlanBuilder.collectionName}
+                        onChange={(event) =>
+                          setCollectionPlanBuilder((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  collectionName: event.target.value,
+                                }
+                              : prev,
+                          )
+                        }
+                        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-normal text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Project start
+                      <input
+                        type="date"
+                        value={builderProjectStartDate}
+                        onChange={(event) =>
+                          setCollectionPlanBuilder((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  projectStartDate: event.target.value,
+                                }
+                              : prev,
+                          )
+                        }
+                        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-normal text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                  </div>
 
                   <div className="rounded-lg border border-gray-200 bg-white">
                     <div className="border-b border-gray-100 p-3">
@@ -3073,6 +3114,11 @@ const DashboardContent = ({
                                     <div className="mt-1 line-clamp-2 text-xs text-gray-500">
                                       {resource.description || "Resource"}
                                     </div>
+                                    {formatResourceDuration(resource) && (
+                                      <div className="mt-2 inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
+                                        {formatResourceDuration(resource)}
+                                      </div>
+                                    )}
                                   </div>
                                   <button
                                     type="button"
@@ -3295,7 +3341,16 @@ const DashboardContent = ({
                             </div>
                           </div>
                         ))}
-                        {builderSelectedResources.map((resource) => (
+                        {builderSelectedResourceTimeline.map((timelineItem) => {
+                          const resource = timelineItem.resource;
+                          const dateRangeLabel =
+                            timelineItem.startDate === timelineItem.endDate
+                              ? formatPlannerDate(timelineItem.startDate)
+                              : `${formatPlannerDate(
+                                  timelineItem.startDate,
+                                )} to ${formatPlannerDate(timelineItem.endDate)}`;
+
+                          return (
                           <div
                             key={`selected-builder-resource-${resource.id}`}
                             className="rounded-lg border border-gray-100 bg-white p-3"
@@ -3309,7 +3364,20 @@ const DashboardContent = ({
                                   </div>
                                 </div>
                                 <div className="mt-1 line-clamp-2 text-xs text-gray-500">
-                                  Added as a collection resource
+                                  {dateRangeLabel || "Generated project task"}
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {formatResourceDuration(resource) && (
+                                    <span className="inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
+                                      {formatResourceDuration(resource)}
+                                    </span>
+                                  )}
+                                  <span className="inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                                    {timelineItem.durationDays}{" "}
+                                    {timelineItem.durationDays === 1
+                                      ? "day"
+                                      : "days"}
+                                  </span>
                                 </div>
                               </div>
                               <button
@@ -3321,7 +3389,8 @@ const DashboardContent = ({
                               </button>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </>
                     )}
                   </div>

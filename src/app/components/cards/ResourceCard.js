@@ -65,6 +65,10 @@ const ResourceCard = ({
   const [isInfoPopupOpen, setIsInfoPopupOpen] = useState(false);
   const [resourceType, setResourceType] = useState("");
   const [showVideoModal, setShowVideoModal] = useState(false);
+  const formattedDuration =
+    resource?.durationValue && resource?.durationUnit
+      ? `${resource.durationValue} ${resource.durationUnit}`
+      : null;
   //TODO: Update this with actual data
   const infoDetails = {
     organization: "COA",
@@ -254,6 +258,15 @@ const ResourceCard = ({
                     <span className="flex items-center gap-1 sm:gap-2">
                       <FaGraduationCap className="w-3 h-3 sm:w-4 sm:h-4" />
                       {expertiseLevel.name} Level
+                    </span>
+                  </>
+                )}
+                {formattedDuration && (
+                  <>
+                    <span>•</span>
+                    <span className="flex items-center gap-1 sm:gap-2">
+                      <FaClock className="w-3 h-3 sm:w-4 sm:h-4" />
+                      {formattedDuration}
                     </span>
                   </>
                 )}

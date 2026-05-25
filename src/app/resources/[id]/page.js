@@ -666,13 +666,14 @@ const ResourcePage = () => {
   const isAdvocateForSelectedTenant =
     Array.isArray(isAdvocate) && isAdvocate.length > 0;
 
-  const canManageResourceChildContent =
+  const canEditResource =
     !isPublicAccess &&
     !!resource?.id &&
     (isAdmin ||
       isAdvocateForSelectedTenant ||
       systemUser?.id === resource?.addedByUserId ||
       systemUser?.id === resource?.userId);
+  const canManageResourceChildContent = canEditResource;
 
   const handleSubmitAttachment = async (attachmentPayload) => {
     try {
@@ -818,7 +819,7 @@ const ResourcePage = () => {
         >
           ← Back to Resources
         </button>
-        {(isAdmin || isAdvocateForSelectedTenant) && (
+        {canEditResource && (
           <button
             onClick={() => setIsEditing(true)}
             className="flex items-center gap-2 px-3 py-2 bg-white/80 sm:backdrop-blur-sm rounded-md mb-4

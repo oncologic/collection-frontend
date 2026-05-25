@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FaGraduationCap, FaInstagram } from "react-icons/fa";
+import { FaClock, FaGraduationCap, FaInstagram } from "react-icons/fa";
 import { PatientRating, ExpertRating } from "../ratings/RatingComponents";
 import Image from "next/image";
 import CustomEditor from "../common/CustomEditor";
@@ -28,6 +28,10 @@ const ResourceDetails = ({ isOpen, onClose, info, resource }) => {
   const playableVideoUrl = getPlayableVideoUrl(resource?.videoUrl, resource?.url);
   const playableVideoType = getVideoType(playableVideoUrl);
   const normalizedPlayableVideoUrl = normalizeVideoUrl(playableVideoUrl);
+  const formattedDuration =
+    resource?.durationValue && resource?.durationUnit
+      ? `${resource.durationValue} ${resource.durationUnit}`
+      : null;
 
   return (
     <div className="fixed inset-0 flex items-start justify-center bg-gray-400 bg-opacity-50 z-50 overflow-y-auto pt-4 sm:pt-8">
@@ -134,6 +138,14 @@ const ResourceDetails = ({ isOpen, onClose, info, resource }) => {
                     ? new Date(resource.resourceUpdatedAt).toLocaleDateString()
                     : "N/A"}
                 </p>
+                {formattedDuration && (
+                  <p className="flex items-center gap-2">
+                    <FaClock className="text-blue-600" />
+                    <span>
+                      <strong>Estimated Duration:</strong> {formattedDuration}
+                    </span>
+                  </p>
+                )}
               </div>
               <h3 className="text-xl font-semibold mb-4 text-slate-600 flex items-center gap-2">
                 <FaGraduationCap className="text-blue-600" />

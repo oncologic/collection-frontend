@@ -7,6 +7,7 @@ import {
   FaTimes,
   FaExternalLinkAlt,
   FaCalendar,
+  FaClock,
   FaShieldAlt,
   FaGraduationCap,
   FaTags,
@@ -19,6 +20,10 @@ const ResourceDetailModal = ({ isOpen, onClose, resource, collectionNote }) => {
   const formattedDate = resource.resourceDate
     ? DateTime.fromISO(resource.resourceDate).toFormat("LLLL dd, yyyy")
     : "No date available";
+  const formattedDuration =
+    resource.durationValue && resource.durationUnit
+      ? `${resource.durationValue} ${resource.durationUnit}`
+      : null;
 
   return (
     <Modal onClose={onClose} isOpen={isOpen} showCloseButton={false}>
@@ -57,6 +62,12 @@ const ResourceDetailModal = ({ isOpen, onClose, resource, collectionNote }) => {
                 <span className="inline-flex items-center gap-1 text-sm text-gray-600">
                   <FaGraduationCap className="w-4 h-4" />
                   {resource.expertiseLevel.name} Level
+                </span>
+              )}
+              {formattedDuration && (
+                <span className="inline-flex items-center gap-1 text-sm text-gray-600">
+                  <FaClock className="w-4 h-4" />
+                  {formattedDuration}
                 </span>
               )}
             </div>
