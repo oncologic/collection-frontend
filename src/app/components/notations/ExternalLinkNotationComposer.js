@@ -354,6 +354,7 @@ const ExternalLinkNotationComposer = ({
 
   const invalidateNoteQueries = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["externalLinks"] });
+    queryClient.invalidateQueries({ queryKey: ["collections"] });
     queryClient.invalidateQueries({ queryKey: ["notations", externalLinkId] });
   }, [externalLinkId, queryClient]);
 

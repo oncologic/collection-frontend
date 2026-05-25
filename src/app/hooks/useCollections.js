@@ -297,6 +297,7 @@ export function useUpdateNotation() {
       // Invalidate affected queries to ensure consistency
       queryClient.invalidateQueries({ queryKey: ["notations"] });
       queryClient.invalidateQueries({ queryKey: ["externalLinks"] });
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
       toast.success("Notation updated successfully");
     },
     onError: (error, { notationId }, context) => {
@@ -661,6 +662,7 @@ export function useAddExternalLinkNotation() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries(["notations", variables.externalLinkId]);
       queryClient.invalidateQueries({ queryKey: ["externalLinks"] });
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
       toast.success("Notation added successfully");
     },
     onError: (error) => {

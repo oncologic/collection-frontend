@@ -63,6 +63,7 @@ import {
   FaChalkboard,
 } from "react-icons/fa";
 import Modal from "@/app/components/Modal";
+import { addExternalLinkNotation } from "@/app/api/collectionsApi";
 import AddExternalLinkForm from "@/app/components/forms/AddExternalLinkForm";
 import CustomEditor from "@/app/components/common/CustomEditor";
 import AddAttachmentForm from "@/app/components/forms/AddAttachmentForm";
@@ -122,6 +123,7 @@ import AttachmentAICreate from "./AttachmentAICreate";
 import SlackIntegration from "./SlackIntegration";
 import BulkNotationImport from "./BulkNotationImport";
 import ExternalLinkPubMedModal from "./ExternalLinkPubMedModal";
+import ResourceTaskNotationModal from "./ResourceTaskNotationModal";
 
 const normalizeLinkGroupsByCategory = (value) => {
   if (!value) return {};
@@ -274,6 +276,37 @@ const getExternalLinkDateExpansion = (externalLink, notationRange) => {
   };
 };
 
+const buildResourceTaskNotationData = (task, visibility = "private") => {
+  const resource = task.resource || {};
+  const title = resource.name || "Untitled resource";
+  const resourceUrl = resource.url || "";
+
+  return {
+    title,
+    description: "Generated from resource duration",
+    notes: [resourceUrl ? `Source: ${resourceUrl}` : null, task.notes]
+      .filter(Boolean)
+      .join("\n\n"),
+    category: "Task",
+    status: "pending",
+    type: "task",
+    visibility,
+    date: task.startDate,
+    startDate: task.startDate,
+    endDate: task.endDate || task.startDate,
+    customFields: {
+      sourceKind: "external_link_resource",
+      sourceResourceId: task.resourceId,
+      sourceResourceName: title,
+      sourceExternalLinkId: task.externalLinkId,
+      durationValue: resource.durationValue ?? resource.duration_value ?? null,
+      durationUnit: resource.durationUnit ?? resource.duration_unit ?? null,
+      durationDays: task.durationDays,
+      generatedFromExternalLinkResourceTaskModal: true,
+    },
+  };
+};
+
 const ExternalLinkDetails = ({
   externalLink,
   isAdmin,
@@ -298,7 +331,7 @@ const ExternalLinkDetails = ({
   onShowPublicJsonModal,
   contextCollectionId = "",
 }) => {
-  const { userId } = useContextAuth();
+  const { userId, getAuthHeader } = useContextAuth();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [editingNotation, setEditingNotation] = useState(null);
@@ -348,6 +381,8 @@ const ExternalLinkDetails = ({
   const [showExportModal, setShowExportModal] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showAddResources, setShowAddResources] = useState(false);
+  const [showResourceTaskModal, setShowResourceTaskModal] = useState(false);
+  const [isCreatingResourceTasks, setIsCreatingResourceTasks] = useState(false);
   const [showPubMedResourceSearch, setShowPubMedResourceSearch] =
     useState(false);
   const [dateExpansionPrompt, setDateExpansionPrompt] = useState(null);
@@ -388,7 +423,36 @@ const ExternalLinkDetails = ({
   // Resources hooks
   const { data: linkedResourcesData, isLoading: isLoadingResources } =
     useExternalLinkResources(collectionId, externalLink?.id);
-  const linkedResources = linkedResourcesData?.resources || [];
+  const linkedResources = useMemo(
+    () => linkedResourcesData?.resources || [],
+    [linkedResourcesData]
+  );
+  const resourceTaskCollection = useMemo(
+    () => ({
+      id: collectionId,
+      startDate:
+        collectionScopedExternalLink.startDate ||
+        collectionScopedExternalLink.date ||
+        getTodayDateInputValue(),
+      externalLinks: [
+        {
+          ...collectionScopedExternalLink,
+          id: externalLink.id,
+          name: externalLink.name,
+          resources: linkedResources,
+          notations: externalLink.notations || [],
+        },
+      ],
+    }),
+    [
+      collectionId,
+      collectionScopedExternalLink,
+      externalLink.id,
+      externalLink.name,
+      externalLink.notations,
+      linkedResources,
+    ]
+  );
   const removeResourcesMutation = useRemoveResourcesFromExternalLink();
   const updateResourceOrderMutation = useUpdateResourceOrder();
   const updateResourceNotesMutation = useUpdateResourceNotes();
@@ -1029,6 +1093,63 @@ const ExternalLinkDetails = ({
       externalLink.id,
       isCollaborator,
       isPreparingNotation,
+      refetchExternalLink,
+      userRole,
+    ]
+  );
+
+  const handleCreateResourceTaskNotations = useCallback(
+    async (tasks) => {
+      if (!tasks.length || isCreatingResourceTasks) return;
+      if (!collectionId) {
+        toast.error("No collection associated with this external link");
+        return;
+      }
+
+      const visibility =
+        isCollaborator && userRole !== "admin" ? "unlisted" : "private";
+
+      setIsCreatingResourceTasks(true);
+      try {
+        const headers = await getAuthHeader();
+        for (const task of tasks) {
+          await addExternalLinkNotation(
+            collectionId,
+            externalLink.id,
+            buildResourceTaskNotationData(task, visibility),
+            headers
+          );
+        }
+
+        await handleMaybeExpandExternalLinkDates({
+          ...getCombinedDateRangeValues(tasks),
+          collectionId,
+        });
+
+        if (refetchExternalLink) {
+          await refetchExternalLink();
+        }
+        await queryClient.invalidateQueries({ queryKey: ["collections"] });
+
+        setShowResourceTaskModal(false);
+        toast.success(
+          `${tasks.length} task notation${tasks.length === 1 ? "" : "s"} created`
+        );
+      } catch (error) {
+        console.error("Error creating task notations from resources:", error);
+        toast.error(error?.message || "Failed to create task notations");
+      } finally {
+        setIsCreatingResourceTasks(false);
+      }
+    },
+    [
+      collectionId,
+      externalLink.id,
+      getAuthHeader,
+      handleMaybeExpandExternalLinkDates,
+      isCollaborator,
+      isCreatingResourceTasks,
+      queryClient,
       refetchExternalLink,
       userRole,
     ]
@@ -3702,6 +3823,16 @@ const ExternalLinkDetails = ({
                     {canAddContent && (
                       <div className="flex items-center gap-2">
                         <button
+                          type="button"
+                          onClick={() => setShowResourceTaskModal(true)}
+                          disabled={linkedResources.length === 0}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          title="Create task notations from resources"
+                          aria-label="Create task notations from resources"
+                        >
+                          <FaTasks className="h-4 w-4" />
+                        </button>
+                        <button
                           onClick={() => setShowPubMedResourceSearch(true)}
                           className="inline-flex items-center px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                         >
@@ -4585,6 +4716,16 @@ const ExternalLinkDetails = ({
           isCollaborator={isCollaborator}
           userRole={userRole}
           systemUserId={systemUser?.id}
+        />
+      )}
+
+      {showResourceTaskModal && (
+        <ResourceTaskNotationModal
+          isOpen={showResourceTaskModal}
+          collection={resourceTaskCollection}
+          isCreating={isCreatingResourceTasks}
+          onClose={() => setShowResourceTaskModal(false)}
+          onCreateTasks={handleCreateResourceTaskNotations}
         />
       )}
 

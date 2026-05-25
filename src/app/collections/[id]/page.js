@@ -122,6 +122,7 @@ import TagFilter from "@/app/components/filters/TagFilter";
 import TagClassificationEnhanced from "@/app/components/TagClassificationEnhanced";
 import MergeCollectionsModal from "@/app/components/MergeCollectionsModal";
 import WorkflowGanttChart from "@/app/components/WorkflowGanttChart";
+import { updateNotation } from "@/app/api/collectionsApi";
 import { FaCodeBranch, FaMagic, FaUpload } from "react-icons/fa";
 const AddResourcesModal = dynamic(() =>
   import("@/app/components/AddResourcesModal")
@@ -1720,16 +1721,38 @@ export default function CollectionPage() {
   };
 
   const handleUpdateWorkflowStepDates = async (updates) => {
+    const hasNotationUpdates = updates.some(
+      (update) => update.step.timelineItemType === "notation"
+    );
+    const headers = hasNotationUpdates ? await getAuthHeader() : null;
+
     for (const update of updates) {
       const step = update.step;
+      const nextStartDate = update.startDate;
+      const nextEndDate = update.endDate || update.startDate;
+
+      if (step.timelineItemType === "notation") {
+        await updateNotation(
+          step.id,
+          {
+            ...step,
+            date: nextStartDate,
+            startDate: nextStartDate,
+            endDate: nextEndDate,
+          },
+          headers
+        );
+        continue;
+      }
+
       await updateExternalLinkMutationAsync({
         collectionId,
         externalLinkId: step.id,
         linkData: {
           ...step,
-          date: update.startDate,
-          startDate: update.startDate,
-          endDate: update.endDate || update.startDate,
+          date: nextStartDate,
+          startDate: nextStartDate,
+          endDate: nextEndDate,
           workflowMetadata: step.workflowMetadata || {},
         },
       });

@@ -12,6 +12,7 @@ import {
   FaHourglassHalf,
   FaListUl,
   FaMagic,
+  FaRegStickyNote,
   FaTimes,
   FaUser,
 } from "react-icons/fa";
@@ -249,6 +250,17 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 const getStatusStyle = (status) =>
   STATUS_STYLES[String(status || "pending").toLowerCase()] ||
   STATUS_STYLES.pending;
+
+const isDateRangeContained = (childStart, childEnd, parentStart, parentEnd) => {
+  if (!childStart || !parentStart) return false;
+  const resolvedChildEnd = childEnd || childStart;
+  const resolvedParentEnd = parentEnd || parentStart;
+
+  return (
+    childStart.localeCompare(parentStart) >= 0 &&
+    resolvedChildEnd.localeCompare(resolvedParentEnd) <= 0
+  );
+};
 
 const buildTimelineTicks = (startDate, totalDays) => {
   if (!parseDate(startDate)) return [];
@@ -804,11 +816,24 @@ export default function WorkflowGanttChart({
   const [draftByStepId, setDraftByStepId] = useState({});
   const [dragState, setDragState] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [includeDatedNotations, setIncludeDatedNotations] = useState(false);
 
   const workflowKind = collection?.workflowMetadata?.kind;
+  const datedNotationCount = useMemo(
+    () =>
+      (collection?.externalLinks || []).reduce((count, externalLink) => {
+        return (
+          count +
+          (externalLink.notations || []).filter(
+            (notation) => notation?.startDate || notation?.date,
+          ).length
+        );
+      }, 0),
+    [collection],
+  );
 
   const workflowSteps = useMemo(() => {
-    return (collection?.externalLinks || [])
+    const externalRows = (collection?.externalLinks || [])
       .filter((step) => {
         return (
           step?.startDate ||
@@ -833,27 +858,125 @@ export default function WorkflowGanttChart({
           toDateString(step.endDate) ||
           addDays(startDate, Math.max(0, estimatedDurationDays - 1));
         const draft = draftByStepId[step.id];
+        const timelineSortOrder = (step.sortOrder ?? index) * 1000;
+        const childNotations = includeDatedNotations
+          ? (step.notations || [])
+              .map((notation) => {
+                const notationStartDate = toDateString(
+                  notation.startDate || notation.date,
+                );
+                if (!notationStartDate) return null;
+
+                const notationEndDate =
+                  toDateString(notation.endDate) || notationStartDate;
+
+                if (
+                  !isDateRangeContained(
+                    notationStartDate,
+                    notationEndDate,
+                    startDate,
+                    endDate,
+                  )
+                ) {
+                  return null;
+                }
+
+                return {
+                  ...notation,
+                  timelineItemType: "notation",
+                  parentExternalLinkId: step.id,
+                  parentExternalLinkName:
+                    step.name || step.title || step.url,
+                  name: notation.title || "Untitled notation",
+                  startDate:
+                    draftByStepId[notation.id]?.startDate ||
+                    notationStartDate,
+                  endDate:
+                    draftByStepId[notation.id]?.endDate || notationEndDate,
+                  status: String(notation.status || "pending").toLowerCase(),
+                  workflowMetadata: notation.workflowMetadata || {},
+                };
+              })
+              .filter(Boolean)
+          : [];
 
         return {
           ...step,
+          timelineItemType: "externalLink",
+          timelineSortOrder,
+          childNotations,
           startDate: draft?.startDate || startDate,
           endDate: draft?.endDate || endDate,
           status: String(step.status || "pending").toLowerCase(),
-          sortOrder: step.sortOrder ?? index,
+          sortOrder: timelineSortOrder,
         };
-      })
+      });
+
+    const notationRows = includeDatedNotations
+      ? (collection?.externalLinks || []).flatMap((externalLink, linkIndex) => {
+          return (externalLink.notations || [])
+            .map((notation, notationIndex) => {
+              const startDate = toDateString(
+                notation.startDate || notation.date,
+              );
+              if (!startDate) return null;
+
+              const endDate = toDateString(notation.endDate) || startDate;
+              const draft = draftByStepId[notation.id];
+              const parentSortOrder =
+                (externalLink.sortOrder ?? linkIndex) * 1000;
+              const parentStartDate = toDateString(
+                externalLink.startDate || externalLink.date,
+              );
+              const parentEndDate =
+                toDateString(externalLink.endDate) || parentStartDate;
+
+              if (
+                isDateRangeContained(
+                  startDate,
+                  endDate,
+                  parentStartDate,
+                  parentEndDate,
+                )
+              ) {
+                return null;
+              }
+
+              return {
+                ...notation,
+                timelineItemType: "notation",
+                timelineSortOrder:
+                  parentSortOrder + (notation.listOrder ?? notationIndex) + 1,
+                parentExternalLinkId: externalLink.id,
+                parentExternalLinkName:
+                  externalLink.name || externalLink.title || externalLink.url,
+                name: notation.title || "Untitled notation",
+                startDate: draft?.startDate || startDate,
+                endDate: draft?.endDate || endDate,
+                status: String(notation.status || "pending").toLowerCase(),
+                sortOrder:
+                  parentSortOrder + (notation.listOrder ?? notationIndex) + 1,
+                workflowMetadata: notation.workflowMetadata || {},
+              };
+            })
+            .filter(Boolean);
+        })
+      : [];
+
+    return [...externalRows, ...notationRows]
       .sort((a, b) => {
-        const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+        const orderDiff =
+          (a.timelineSortOrder ?? a.sortOrder ?? 0) -
+          (b.timelineSortOrder ?? b.sortOrder ?? 0);
         if (orderDiff !== 0) return orderDiff;
         return parseDate(a.startDate) - parseDate(b.startDate);
       });
-  }, [collection, draftByStepId]);
+  }, [collection, draftByStepId, includeDatedNotations]);
 
   const shouldRender =
     workflowKind ||
-    workflowSteps.some(
-      (step) => step.workflowMetadata?.kind === "workflow_step",
-    );
+    workflowSteps.length > 0 ||
+    datedNotationCount > 0;
 
   const assistantProposalByStepId = useMemo(() => {
     return new Map(assistantProposal.map((update) => [update.step.id, update]));
@@ -863,13 +986,18 @@ export default function WorkflowGanttChart({
     step.startDate,
     step.endDate || step.startDate,
   ]);
+  const fallbackScheduleStartDate =
+    toDateString(collection?.startDate) || toDateString(new Date());
   const scheduleStartDate = scheduleDateValues
     .filter(Boolean)
-    .sort((a, b) => parseDate(a) - parseDate(b))[0];
+    .sort((a, b) => parseDate(a) - parseDate(b))[0] ||
+    fallbackScheduleStartDate;
   const scheduleEndDate = scheduleDateValues
     .filter(Boolean)
     .sort((a, b) => parseDate(a) - parseDate(b))
-    .at(-1);
+    .at(-1) ||
+    toDateString(collection?.endDate) ||
+    fallbackScheduleStartDate;
   const timelineDateValues = [
     ...scheduleDateValues,
     ...assistantProposal.flatMap((update) => [
@@ -880,11 +1008,14 @@ export default function WorkflowGanttChart({
 
   const chartContentStartDate = timelineDateValues
     .filter(Boolean)
-    .sort((a, b) => parseDate(a) - parseDate(b))[0];
+    .sort((a, b) => parseDate(a) - parseDate(b))[0] ||
+    fallbackScheduleStartDate;
   const chartContentEndDate = timelineDateValues
     .filter(Boolean)
     .sort((a, b) => parseDate(a) - parseDate(b))
-    .at(-1);
+    .at(-1) ||
+    toDateString(collection?.endDate) ||
+    chartContentStartDate;
   const chartStartDate =
     addDays(chartContentStartDate, -TIMELINE_CONTEXT_DAYS) ||
     chartContentStartDate;
@@ -910,7 +1041,11 @@ export default function WorkflowGanttChart({
       const collectionQuery = collection?.id
         ? `?collectionId=${encodeURIComponent(collection.id)}`
         : "";
-      router.push(`/external-links/${step.id}${collectionQuery}`);
+      const externalLinkId =
+        step.timelineItemType === "notation"
+          ? step.parentExternalLinkId
+          : step.id;
+      router.push(`/external-links/${externalLinkId}${collectionQuery}`);
     },
     [collection?.id, router],
   );
@@ -1060,7 +1195,7 @@ export default function WorkflowGanttChart({
     totalDays,
   ]);
 
-  if (!shouldRender || workflowSteps.length === 0) return null;
+  if (!shouldRender) return null;
 
   const handleDragStart = (event, step) => {
     if (!canEdit || !onUpdateStepDates) return;
@@ -1180,7 +1315,7 @@ export default function WorkflowGanttChart({
 
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
-            {summary.total} steps
+            {summary.total} {includeDatedNotations ? "items" : "steps"}
           </span>
           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
             {summary.completed} complete
@@ -1210,6 +1345,29 @@ export default function WorkflowGanttChart({
               <TimelineOverviewPopover metrics={timelineMetrics} />
             )}
           </div>
+          <button
+            type="button"
+            onClick={() => setIncludeDatedNotations((value) => !value)}
+            disabled={datedNotationCount === 0}
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-md border transition ${
+              includeDatedNotations
+                ? "border-indigo-300 bg-indigo-100 text-indigo-700 shadow-sm"
+                : "border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+            } disabled:cursor-not-allowed disabled:opacity-40`}
+            title={
+              includeDatedNotations
+                ? "Hide dated notations"
+                : "Show dated notations"
+            }
+            aria-label={
+              includeDatedNotations
+                ? "Hide dated notations"
+                : "Show dated notations"
+            }
+            aria-pressed={includeDatedNotations}
+          >
+            <FaRegStickyNote className="h-4 w-4" />
+          </button>
           {canEdit && (
             <button
               type="button"
@@ -1334,45 +1492,57 @@ export default function WorkflowGanttChart({
           </div>
         )}
 
-        {summary.nextStep && (
-          <button
-            type="button"
-            onClick={handleFocusNextStep}
-            className="mb-4 flex w-full flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm text-slate-700 hover:border-blue-200 hover:bg-blue-50/50 sm:flex-row sm:items-center sm:justify-between"
+        {workflowSteps.length === 0 ? (
+          <div
+            ref={ganttPreviewRef}
+            className="rounded-md border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500"
           >
-            <div className="font-medium">Next: {summary.nextStep.name}</div>
-            <div className="text-slate-500">
-              {formatDate(summary.nextStep.startDate)} to{" "}
-              {formatDate(
-                summary.nextStep.endDate || summary.nextStep.startDate,
-              )}
-            </div>
-          </button>
-        )}
+            No dated items
+          </div>
+        ) : (
+          <>
+            {summary.nextStep && (
+              <button
+                type="button"
+                onClick={handleFocusNextStep}
+                className="mb-4 flex w-full flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm text-slate-700 hover:border-blue-200 hover:bg-blue-50/50 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="font-medium">
+                  Next: {summary.nextStep.name}
+                </div>
+                <div className="text-slate-500">
+                  {formatDate(summary.nextStep.startDate)} to{" "}
+                  {formatDate(
+                    summary.nextStep.endDate || summary.nextStep.startDate,
+                  )}
+                </div>
+              </button>
+            )}
 
-        <div ref={ganttPreviewRef} className="scroll-mt-6 overflow-x-auto">
-          <div className="min-w-[960px]">
-            <div className="grid grid-cols-[280px_minmax(720px,1fr)] border-b border-slate-200 pb-2 text-xs font-medium uppercase text-slate-500">
-              <div className="sticky left-0 z-30 bg-white pr-4 shadow-[8px_0_12px_-12px_rgba(15,23,42,0.35)]">
-                Step
-              </div>
-              <div className="relative" style={{ width: chartWidth }}>
-                {ticks.map((tick) => (
-                  <span
-                    key={`${tick.offset}-${tick.label}`}
-                    className="absolute top-0 -translate-x-1/2 whitespace-nowrap"
-                    style={{
-                      left: `${clamp(
-                        (tick.offset / Math.max(1, totalDays)) * 100,
-                        0,
-                        100,
-                      )}%`,
-                    }}
-                  >
-                    {tick.label}
-                  </span>
-                ))}
-              </div>
+            <div ref={ganttPreviewRef} className="scroll-mt-6 overflow-x-auto">
+              <div className="min-w-[960px]">
+                <div className="grid grid-cols-[280px_minmax(720px,1fr)] border-b border-slate-200 pb-2 text-xs font-medium uppercase text-slate-500">
+                  <div className="sticky left-0 z-30 bg-white pr-4 shadow-[8px_0_12px_-12px_rgba(15,23,42,0.35)]">
+                    Step
+                  </div>
+                  <div className="relative" style={{ width: chartWidth }}>
+                    {ticks.map((tick) => (
+                      <span
+                        key={`${tick.offset}-${tick.label}`}
+                        className="absolute top-0 -translate-x-1/2 whitespace-nowrap"
+                        style={{
+                          left: `${clamp(
+                            (tick.offset / Math.max(1, totalDays)) * 100,
+                            0,
+                            100,
+                          )}%`,
+                        }}
+                      >
+                        {tick.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
             </div>
 
             <div className="divide-y divide-slate-100">
@@ -1399,10 +1569,16 @@ export default function WorkflowGanttChart({
                     100
                   : 0;
                 const isDragging = dragState?.step.id === step.id;
+                const stepLabel =
+                  step.name || step.title || step.url || "Untitled step";
+                const childNotations = step.childNotations || [];
+                const timelineRowHeight = childNotations.length
+                  ? Math.min(60, 44 + childNotations.length * 6)
+                  : 40;
 
                 return (
                   <div
-                    key={step.id}
+                    key={`${step.timelineItemType || "step"}:${step.id}`}
                     className="grid min-h-[64px] grid-cols-[280px_minmax(720px,1fr)] items-center py-3"
                   >
                     <div className="sticky left-0 z-20 flex self-stretch flex-col justify-center bg-white pr-4 shadow-[8px_0_12px_-12px_rgba(15,23,42,0.35)]">
@@ -1411,9 +1587,15 @@ export default function WorkflowGanttChart({
                         onClick={() => openStep(step)}
                         className="block max-w-full truncate text-left text-sm font-medium text-slate-800 hover:text-blue-700"
                       >
-                        {step.name || step.title || step.url || "Untitled step"}
+                        {stepLabel}
                       </button>
                       <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                        {step.timelineItemType === "notation" && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-indigo-700">
+                            <FaRegStickyNote className="h-3 w-3" />
+                            Notation
+                          </span>
+                        )}
                         <span
                           className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 capitalize ${statusStyle.chip}`}
                         >
@@ -1432,19 +1614,20 @@ export default function WorkflowGanttChart({
                     </div>
 
                     <div
-                      className="relative h-10 rounded-sm bg-slate-50"
-                      style={{ width: chartWidth }}
+                      className="relative rounded-sm bg-slate-50"
+                      style={{ width: chartWidth, height: timelineRowHeight }}
                     >
                       {ticks.map((tick) => (
                         <span
                           key={`${step.id}-${tick.offset}`}
-                          className="absolute top-0 h-10 border-l border-slate-200"
+                          className="absolute top-0 border-l border-slate-200"
                           style={{
                             left: `${clamp(
                               (tick.offset / Math.max(1, totalDays)) * 100,
                               0,
                               100,
                             )}%`,
+                            height: timelineRowHeight,
                           }}
                         />
                       ))}
@@ -1485,7 +1668,7 @@ export default function WorkflowGanttChart({
                           left: `${clamp(left, 0, 100)}%`,
                           width: `${clamp(width, 2, 100)}%`,
                         }}
-                        title={`${step.name}: ${formatDate(
+                        title={`${stepLabel}: ${formatDate(
                           step.startDate,
                         )} to ${formatDate(step.endDate || step.startDate)}`}
                       >
@@ -1494,13 +1677,67 @@ export default function WorkflowGanttChart({
                           {formatDate(step.endDate || step.startDate)}
                         </span>
                       </button>
+                      {childNotations.map((notation, childIndex) => {
+                        const childLeft =
+                          (dayOffset(chartStartDate, notation.startDate) /
+                            Math.max(1, totalDays)) *
+                          100;
+                        const childWidth =
+                          (daysBetweenInclusive(
+                            notation.startDate,
+                            notation.endDate,
+                          ) /
+                            Math.max(1, totalDays)) *
+                          100;
+                        const notationLabel =
+                          notation.name ||
+                          notation.title ||
+                          "Untitled notation";
+                        const isChildDragging =
+                          dragState?.step.id === notation.id;
+
+                        return (
+                          <button
+                            key={notation.id}
+                            type="button"
+                            onPointerDown={(event) =>
+                              handleDragStart(event, notation)
+                            }
+                            onClick={() => openStep(notation)}
+                            disabled={isSaving}
+                            className={`absolute z-20 h-1.5 min-w-[18px] rounded-full bg-indigo-500 shadow-sm ${
+                              canEdit
+                                ? "cursor-grab active:cursor-grabbing"
+                                : "cursor-pointer"
+                            } ${
+                              isChildDragging ? "ring-2 ring-indigo-200" : ""
+                            }`}
+                            style={{
+                              top: 36 + childIndex * 6,
+                              left: `${clamp(childLeft, 0, 100)}%`,
+                              width: `${clamp(childWidth, 2, 100)}%`,
+                            }}
+                            title={`${notationLabel}: ${formatDate(
+                              notation.startDate,
+                            )} to ${formatDate(
+                              notation.endDate || notation.startDate,
+                            )}`}
+                            aria-label={`${notationLabel}: ${formatDate(
+                              notation.startDate,
+                            )} to ${formatDate(
+                              notation.endDate || notation.startDate,
+                            )}`}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
                 );
               })}
             </div>
           </div>
-        </div>
+          </>
+        )}
       </>
     </section>
   );
